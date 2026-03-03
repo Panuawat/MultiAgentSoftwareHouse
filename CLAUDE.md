@@ -25,7 +25,8 @@
 | Backend & State | Laravel 11 (REST API + MySQL) |
 | Queue | Laravel Queue (Database Driver → Redis ใน Production) |
 | Frontend | Next.js 14 + Tailwind CSS |
-| Realtime | Server-Sent Events (SSE) |
+| Realtime | Server-Sent Events (SSE) (With Auto-Reconnect) |
+| Extras | ZIP Export (Code Artifacts) |
 
 ---
 
@@ -163,7 +164,8 @@ openclaw/
         ├── components/
         │   ├── KanbanBoard.tsx
         │   ├── AgentStatusCard.tsx
-        │   └── CodeViewer.tsx
+        │   ├── CodeViewer.tsx
+        │   └── AgentOutputPanel.tsx
         └── app/
 ```
 
@@ -191,11 +193,27 @@ php artisan test --filter=StateMachineTest
 
 **Phase 1: System Architecture & Database Design**
 
-- [ ] สร้าง Laravel Project
-- [ ] เขียน Database Migrations ทั้งหมด
-- [ ] เขียน StateMachineService.php
-- [ ] เขียน Unit Tests สำหรับ State Transitions
-- [ ] Setup Mock Agent Mode
+- [x] สร้าง Laravel Project
+- [x] เขียน Database Migrations ทั้งหมด
+- [x] เขียน StateMachineService.php
+- [x] เขียน Unit Tests สำหรับ State Transitions
+- [x] Setup Mock Agent Mode
+
+**Phase 2: Core Orchestration & AI Integration**
+
+- [x] พัฒนา Agent Jobs (PM, UX, Dev, QA)
+- [x] เชื่อมต่อ Gemini API และ Ollama
+- [x] สร้าง SSE Controller สำหรับ Realtime Updates
+- [x] พัฒนา Frontend Kanban Board และ Task Execution Flow
+
+**Phase 3: Stabilization & UI Improvements**
+
+- [x] เพิ่มระบบ Auto-reconnect ให้ SSE
+- [x] เพิ่มปุ่ม Export Code เป็นไฟล์ .zip
+- [x] สร้าง AgentOutputPanel แสดง Log ความคิดของ Agent
+- [x] เพิ่มระบบจัดการ Token Budget และ Resume Task กรณีงบหมด
+- [ ] ฟีเจอร์ย้อนเวลาโค้ด (Code Versioning UI)
+- [ ] เพิ่มช่อง Chat ให้แทรกแซงกุ้ง PM
 
 ---
 
