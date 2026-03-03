@@ -36,8 +36,8 @@ export function useTaskStream(taskId: number | null) {
     }
 
     es.onerror = () => {
-      es.close()
-      setStreaming(false)
+      console.warn('SSE connection lost, auto-reconnecting...')
+      // EventSource will automatically try to reconnect
     }
 
     return () => es.close()

@@ -9,6 +9,7 @@ import TaskForm from '@/components/TaskForm'
 import KanbanBoard from '@/components/KanbanBoard'
 import AgentStatusCard from '@/components/AgentStatusCard'
 import CodeViewer from '@/components/CodeViewer'
+import AgentOutputPanel from '@/components/AgentOutputPanel'
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
@@ -19,6 +20,7 @@ export default function ProjectPage() {
   const [artifacts, setArtifacts] = useState<CodeArtifact[]>([])
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [loadingProject, setLoadingProject] = useState(true)
+  const [updateTrigger, setUpdateTrigger] = useState(0)
 
   const { task: liveTask, streaming } = useTaskStream(activeTaskId)
 
@@ -37,6 +39,7 @@ export default function ProjectPage() {
   const handleTaskComplete = useCallback(async (taskId: number, status: string) => {
     const tRes = await api.tasks.listByProject(projectId)
     setTasks(tRes.data)
+    setUpdateTrigger(prev => prev + 1)
     if (status === 'completed') {
       try {
         const aRes = await api.tasks.artifacts(taskId)
@@ -149,6 +152,14 @@ export default function ProjectPage() {
           <div>
             <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Pipeline</h2>
             <KanbanBoard tasks={tasks} liveTask={liveTask} />
+          </div>
+        )}
+
+        {/* Agent Logs */}
+        {currentTask && (
+          <div>
+            <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Agent Logs & Output</h2>
+            <AgentOutputPanel taskId={currentTask.id} updateTrigger={updateTrigger} />
           </div>
         )}
 

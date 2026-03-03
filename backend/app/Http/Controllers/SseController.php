@@ -13,13 +13,13 @@ class SseController extends Controller
     public function stream(Task $task, Request $request): StreamedResponse
     {
         return response()->stream(function () use ($task) {
-            set_time_limit(60);
+            set_time_limit(300);
 
             if (ob_get_level() > 0) {
                 ob_end_clean();
             }
 
-            $maxIterations = 30;
+            $maxIterations = 120;
 
             for ($i = 0; $i < $maxIterations; $i++) {
                 $task->refresh();
@@ -32,14 +32,14 @@ class SseController extends Controller
                 flush();
 
                 if (in_array($task->status, self::TERMINAL_STATUSES, true)) {
+                    echo 'data: '.json_encode(['event' => 'close'])."\n\n";
+                    flush();
                     break;
                 }
 
                 usleep(1_500_000); // 1.5 seconds
             }
 
-            echo 'data: '.json_encode(['event' => 'close'])."\n\n";
-            flush();
         }, 200, [
             'Content-Type'    => 'text/event-stream',
             'Cache-Control'   => 'no-cache',

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\TaskStatusUpdated;
+use App\Exceptions\TokenBudgetExceededException;
 use App\Models\AgentLog;
 use App\Models\Task;
 use App\Services\OllamaService;
@@ -62,20 +63,27 @@ class QaAgentJob implements ShouldQueue
         ]);
 
         if ($response['passed']) {
-            $sm->transition($this->taskId, 'completed');
-            event(new TaskStatusUpdated($task->fresh()));
-
+            try {
+                $sm->transition($this->taskId, 'completed');
+                event(new TaskStatusUpdated($task->fresh()));
+            } catch (TokenBudgetExceededException $e) {
+                $this->escalate($task, $sm, $artifacts, "Token budget exceeded ({$e->getMessage()})");
+            }
             return;
         }
 
         // QA failed — attempt retry (StateMachineService auto-escalates at retry_count >= 3)
-        $sm->transition($this->taskId, 'qa_failed');
-        $result = $sm->transition($this->taskId, 'dev_coding');
+        try {
+            $sm->transition($this->taskId, 'qa_failed');
+            $result = $sm->transition($this->taskId, 'dev_coding');
 
-        event(new TaskStatusUpdated($result));
+            event(new TaskStatusUpdated($result));
 
-        if ($result->status === 'dev_coding') {
-            DevAgentJob::dispatch($this->taskId);
+            if ($result->status === 'dev_coding') {
+                DevAgentJob::dispatch($this->taskId);
+            }
+        } catch (TokenBudgetExceededException $e) {
+            $this->escalate($task, $sm, $artifacts, "Token budget exceeded ({$e->getMessage()})");
         }
     }
 

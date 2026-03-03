@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\TaskStatusUpdated;
+use App\Exceptions\TokenBudgetExceededException;
 use App\Models\AgentLog;
 use App\Models\Task;
 use App\Services\OllamaService;
@@ -59,9 +60,12 @@ class UxAgentJob implements ShouldQueue
 
         event(new TaskStatusUpdated($task));
 
-        $sm->transition($this->taskId, 'dev_coding');
-
-        DevAgentJob::dispatch($this->taskId);
+        try {
+            $sm->transition($this->taskId, 'dev_coding');
+            DevAgentJob::dispatch($this->taskId);
+        } catch (TokenBudgetExceededException $e) {
+            $this->escalate($task, $sm, $pmOutput, "Token budget exceeded ({$e->getMessage()})");
+        }
     }
 
     /** @return array{0: array, 1: int} */

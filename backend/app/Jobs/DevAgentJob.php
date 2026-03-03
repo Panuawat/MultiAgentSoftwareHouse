@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\TaskStatusUpdated;
+use App\Exceptions\TokenBudgetExceededException;
 use App\Models\AgentLog;
 use App\Models\CodeArtifact;
 use App\Models\Task;
@@ -72,9 +73,12 @@ class DevAgentJob implements ShouldQueue
 
         event(new TaskStatusUpdated($task));
 
-        $sm->transition($this->taskId, 'qa_testing');
-
-        QaAgentJob::dispatch($this->taskId);
+        try {
+            $sm->transition($this->taskId, 'qa_testing');
+            QaAgentJob::dispatch($this->taskId);
+        } catch (TokenBudgetExceededException $e) {
+            $this->escalate($task, $sm, $pmOutput, $uxOutput, "Token budget exceeded ({$e->getMessage()})");
+        }
     }
 
     /** @return array{0: array, 1: int} */

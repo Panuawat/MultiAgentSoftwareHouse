@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { FileCode } from 'lucide-react'
+import { FileCode, Download } from 'lucide-react'
 import type { CodeArtifact } from '@/lib/api'
 
 interface Props {
@@ -16,9 +16,20 @@ export default function CodeViewer({ artifacts }: Props) {
 
   return (
     <div className="bg-bark-light rounded-xl border border-clay-dark/20 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-clay-dark/20 bg-bark">
-        <FileCode size={16} className="text-clay-DEFAULT" />
-        <span className="text-sm font-semibold text-clay-DEFAULT">Code Artifacts</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-clay-dark/20 bg-bark">
+        <div className="flex items-center gap-2">
+          <FileCode size={16} className="text-clay-DEFAULT" />
+          <span className="text-sm font-semibold text-clay-DEFAULT">Code Artifacts</span>
+        </div>
+        <button
+          onClick={() => {
+            window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${artifacts[0].task_id}/export`
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-bark bg-clay-DEFAULT hover:bg-clay-light rounded-md transition-colors"
+        >
+          <Download size={14} />
+          Export ZIP
+        </button>
       </div>
 
       {/* Tab bar */}
@@ -27,11 +38,10 @@ export default function CodeViewer({ artifacts }: Props) {
           <button
             key={a.id}
             onClick={() => setActiveIndex(i)}
-            className={`px-3 py-1.5 text-xs rounded-t-md whitespace-nowrap transition-colors ${
-              i === activeIndex
+            className={`px-3 py-1.5 text-xs rounded-t-md whitespace-nowrap transition-colors ${i === activeIndex
                 ? 'bg-bark-light text-clay-DEFAULT border border-b-bark-light border-clay-dark/30 -mb-px'
                 : 'text-cream-muted hover:text-cream-DEFAULT'
-            }`}
+              }`}
           >
             {a.filename}
             {a.version > 1 && (
