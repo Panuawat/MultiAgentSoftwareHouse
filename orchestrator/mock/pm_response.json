@@ -1,0 +1,22 @@
+{
+  "features": [
+    "User authentication (login/logout)",
+    "Project creation and management",
+    "Task creation with title and description",
+    "Real-time task status updates via SSE",
+    "Agent pipeline monitoring dashboard"
+  ],
+  "requirements": [
+    "REST API with JSON responses",
+    "JWT-based authentication",
+    "Laravel Queue for async agent jobs",
+    "SQLite for development, MySQL for production",
+    "Next.js 14 frontend with Tailwind CSS"
+  ],
+  "constraints": [
+    "Token budget per task: 10,000 tokens max",
+    "Maximum 3 QA retry cycles before human review",
+    "All state transitions must use DB transactions with pessimistic locking",
+    "No direct Gemini API calls in mock/test mode"
+  ]
+}

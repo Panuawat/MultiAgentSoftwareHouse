@@ -1,0 +1,165 @@
+'use client'
+import { useEffect, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { ChevronLeft, Loader2, AlertTriangle, CheckCircle, Radio } from 'lucide-react'
+import { api, type Project, type Task, type CodeArtifact } from '@/lib/api'
+import { useTaskStream } from '@/hooks/useTaskStream'
+import TaskForm from '@/components/TaskForm'
+import KanbanBoard from '@/components/KanbanBoard'
+import AgentStatusCard from '@/components/AgentStatusCard'
+import CodeViewer from '@/components/CodeViewer'
+
+export default function ProjectPage() {
+  const { id } = useParams<{ id: string }>()
+  const projectId = parseInt(id, 10)
+
+  const [project, setProject] = useState<Project | null>(null)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [artifacts, setArtifacts] = useState<CodeArtifact[]>([])
+  const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
+  const [loadingProject, setLoadingProject] = useState(true)
+
+  const { task: liveTask, streaming } = useTaskStream(activeTaskId)
+
+  // Load project and tasks on mount
+  useEffect(() => {
+    Promise.all([
+      api.projects.get(projectId),
+      api.tasks.listByProject(projectId),
+    ]).then(([pRes, tRes]) => {
+      setProject(pRes.data)
+      setTasks(tRes.data)
+    }).finally(() => setLoadingProject(false))
+  }, [projectId])
+
+  // When liveTask reaches terminal status, refresh task list and fetch artifacts
+  const handleTaskComplete = useCallback(async (taskId: number, status: string) => {
+    const tRes = await api.tasks.listByProject(projectId)
+    setTasks(tRes.data)
+    if (status === 'completed') {
+      try {
+        const aRes = await api.tasks.artifacts(taskId)
+        setArtifacts(aRes.data)
+      } catch { /* no artifacts */ }
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    if (!liveTask) return
+    const TERMINAL = ['completed', 'human_review_required', 'cancelled']
+    if (TERMINAL.includes(liveTask.status)) {
+      handleTaskComplete(liveTask.id, liveTask.status)
+    }
+  }, [liveTask, handleTaskComplete])
+
+  const handleTaskStarted = (taskId: number) => {
+    setActiveTaskId(taskId)
+    setArtifacts([])
+    // Optimistically add/update task in list
+    api.tasks.get(taskId).then(r => {
+      setTasks(prev =>
+        prev.some(t => t.id === taskId)
+          ? prev.map(t => t.id === taskId ? r.data : t)
+          : [r.data, ...prev]
+      )
+    })
+  }
+
+  if (loadingProject) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={32} className="animate-spin text-clay-DEFAULT" />
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="text-center py-20 text-cream-muted">
+        <p>Project not found.</p>
+        <Link href="/" className="text-clay-DEFAULT hover:underline mt-2 inline-block">← Back to projects</Link>
+      </div>
+    )
+  }
+
+  const currentTask = liveTask ?? (activeTaskId ? tasks.find(t => t.id === activeTaskId) ?? null : null)
+  const isTerminal = currentTask
+    ? ['completed', 'human_review_required', 'cancelled'].includes(currentTask.status)
+    : false
+
+  return (
+    <div className="min-h-screen bg-bark text-cream-DEFAULT">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+        {/* Header */}
+        <div>
+          <Link href="/" className="flex items-center gap-1 text-cream-muted hover:text-clay-DEFAULT text-sm mb-3 w-fit transition-colors">
+            <ChevronLeft size={16} />
+            Projects
+          </Link>
+          <h1 className="text-2xl font-bold text-clay-DEFAULT">{project.name}</h1>
+          {project.description && (
+            <p className="text-cream-muted text-sm mt-1">{project.description}</p>
+          )}
+        </div>
+
+        {/* Live status banner */}
+        {streaming && currentTask && (
+          <div className="flex items-center gap-3 bg-clay-dark/30 border border-clay-DEFAULT/40 rounded-xl px-5 py-3">
+            <Radio size={16} className="text-clay-DEFAULT animate-pulse" />
+            <span className="text-clay-DEFAULT font-semibold text-sm">
+              Live — Agent pipeline running: <span className="font-mono">{currentTask.status}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Terminal status banners */}
+        {isTerminal && currentTask && (
+          <>
+            {currentTask.status === 'completed' && (
+              <div className="flex items-center gap-3 bg-moss/20 border border-moss/50 rounded-xl px-5 py-3">
+                <CheckCircle size={16} className="text-green-400" />
+                <span className="text-green-300 font-semibold text-sm">Task completed successfully!</span>
+              </div>
+            )}
+            {currentTask.status === 'human_review_required' && (
+              <div className="flex items-center gap-3 bg-red-900/30 border border-red-700/50 rounded-xl px-5 py-3">
+                <AlertTriangle size={16} className="text-red-400" />
+                <span className="text-red-300 font-semibold text-sm">
+                  Human review required — max retries exceeded. Check agent logs.
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Task Form */}
+        <TaskForm projectId={projectId} onTaskStarted={handleTaskStarted} />
+
+        {/* Agent Status Cards */}
+        {(currentTask || tasks.length > 0) && (
+          <div>
+            <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Agent Status</h2>
+            <AgentStatusCard task={currentTask} />
+          </div>
+        )}
+
+        {/* Kanban Board */}
+        {tasks.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Pipeline</h2>
+            <KanbanBoard tasks={tasks} liveTask={liveTask} />
+          </div>
+        )}
+
+        {/* Code Viewer */}
+        {artifacts.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Generated Code</h2>
+            <CodeViewer artifacts={artifacts} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

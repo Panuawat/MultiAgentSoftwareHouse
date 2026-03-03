@@ -1,0 +1,46 @@
+{
+  "layout": {
+    "type": "dashboard",
+    "grid": "3-column grid: sidebar (1/4) + main content (2/4) + agent status panel (1/4)"
+  },
+  "components": [
+    {
+      "name": "Sidebar",
+      "type": "container",
+      "props": { "collapsible": true }
+    },
+    {
+      "name": "KanbanBoard",
+      "type": "container",
+      "props": { "columns": ["pending", "in_progress", "completed"] }
+    },
+    {
+      "name": "TaskCard",
+      "type": "card",
+      "props": { "draggable": true, "showStatus": true, "showRetryCount": true }
+    },
+    {
+      "name": "AgentStatusPanel",
+      "type": "container",
+      "props": { "realtime": true, "agents": ["pm", "ux", "dev", "qa"] }
+    },
+    {
+      "name": "AgentStatusCard",
+      "type": "card",
+      "props": { "showTokenUsage": true, "showLastActivity": true }
+    },
+    {
+      "name": "CreateTaskForm",
+      "type": "form",
+      "props": { "fields": ["title", "description", "token_budget"] }
+    }
+  ],
+  "tailwind_classes": {
+    "Sidebar": "w-64 h-screen bg-gray-900 text-white flex flex-col p-4",
+    "KanbanBoard": "flex gap-4 p-6 overflow-x-auto flex-1",
+    "TaskCard": "bg-white rounded-lg shadow p-4 mb-3 cursor-pointer hover:shadow-md transition-shadow",
+    "AgentStatusPanel": "w-80 h-screen bg-gray-50 border-l p-4 overflow-y-auto",
+    "AgentStatusCard": "bg-white rounded-lg border p-3 mb-3",
+    "CreateTaskForm": "bg-white rounded-xl shadow-lg p-6 max-w-lg mx-auto"
+  }
+}

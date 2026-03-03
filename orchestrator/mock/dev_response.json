@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "filename": "src/components/KanbanBoard.tsx",
+      "content": "export default function KanbanBoard() {\n  return <div className=\"flex gap-4 p-6 overflow-x-auto flex-1\">KanbanBoard</div>;\n}",
+      "artifact_type": "component"
+    },
+    {
+      "filename": "src/components/AgentStatusCard.tsx",
+      "content": "export default function AgentStatusCard({ agent }: { agent: string }) {\n  return <div className=\"bg-white rounded-lg border p-3 mb-3\">{agent}</div>;\n}",
+      "artifact_type": "component"
+    },
+    {
+      "filename": "src/app/dashboard/page.tsx",
+      "content": "export default function DashboardPage() {\n  return <main className=\"flex h-screen\"><div>Dashboard</div></main>;\n}",
+      "artifact_type": "page"
+    }
+  ],
+  "tokens_used": 500
+}

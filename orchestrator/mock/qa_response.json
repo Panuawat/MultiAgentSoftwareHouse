@@ -1,0 +1,5 @@
+{
+  "passed": true,
+  "errors": [],
+  "report": "All checks passed. No TypeScript errors, no ESLint errors, no security issues found."
+}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/c/xampp/mysql/bin/mysql --version)",
+      "Bash(cd D:/openclawMutiAgents && composer create-project laravel/laravel backend 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/backend && php artisan migrate 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/backend && php artisan test --filter=StateMachineTest 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/backend && php artisan tinker --execute=\"echo implode\\(', ', Schema::getColumnListing\\('tasks'\\)\\);\" 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/backend && php artisan test 2>&1)",
+      "Bash(cd \"D:/openclawMutiAgents/backend\" && php artisan route:list --path=api 2>&1)",
+      "Bash(cd \"D:/openclawMutiAgents/backend\" && php artisan tinker --execute=\"\n\\\\$p = App\\\\Models\\\\Project::create\\(['name'=>'Demo']\\);\n\\\\$t = App\\\\Models\\\\Task::create\\(['project_id'=>\\\\$p->id,'title'=>'Build landing page','status'=>'pending']\\);\n\\\\$sm = new App\\\\Services\\\\StateMachineService\\(\\);\n\\\\$sm->transition\\(\\\\$t->id, 'pm_processing'\\);\n\\\\$job = new App\\\\Jobs\\\\PmAgentJob\\(\\\\$t->id\\);\n\\\\$job->handle\\(\\\\$sm\\);\necho App\\\\Models\\\\Task::find\\(\\\\$t->id\\)->status;\n\" 2>&1)",
+      "Bash(cd D:/openclawMutiAgents && npx create-next-app@14 frontend --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/frontend && npm install axios lucide-react 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/frontend && npm run build 2>&1)",
+      "Bash(cd D:/openclawMutiAgents/frontend && npx tsc --noEmit 2>&1)"
+    ]
+  }
+}
