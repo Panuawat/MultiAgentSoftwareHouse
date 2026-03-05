@@ -26,7 +26,8 @@
       "Bash(python3:*)",
       "Bash(xxd:*)",
       "Bash(npm install:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(grep:*)"
     ]
   }
 }
