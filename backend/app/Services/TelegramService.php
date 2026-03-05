@@ -182,6 +182,128 @@ class TelegramService
         return implode("\n\n", $sections);
     }
 
+    // ─── Agent Group Chat ───────────────────────────────────────────
+
+    private const AGENT_EMOJIS = [
+        'pm'  => '📋',
+        'ux'  => '🎨',
+        'dev' => '💻',
+        'qa'  => '🧪',
+    ];
+
+    private const AGENT_NAMES = [
+        'pm'  => 'กุ้ง PM',
+        'ux'  => 'กุ้ง UX/UI',
+        'dev' => 'กุ้ง Dev',
+        'qa'  => 'กุ้ง QA',
+    ];
+
+    private const NEXT_AGENT = [
+        'pm'  => 'กุ้ง UX/UI',
+        'ux'  => 'กุ้ง Dev',
+        'dev' => 'กุ้ง QA',
+        'qa'  => null,
+    ];
+
+    /**
+     * Send message to the group chat (opt-in, silent skip if not configured).
+     */
+    public function sendToGroup(string $message): bool
+    {
+        $groupChatId = config('app.telegram_group_chat_id');
+
+        if (empty($groupChatId)) {
+            return false;
+        }
+
+        return $this->send($message, $groupChatId);
+    }
+
+    /**
+     * Notify group chat that an agent started working.
+     */
+    public function notifyAgentStart(int $taskId, string $title, string $agentType): bool
+    {
+        $emoji = self::AGENT_EMOJIS[$agentType] ?? '🤖';
+        $name  = self::AGENT_NAMES[$agentType] ?? $agentType;
+
+        $actions = [
+            'pm'  => 'กำลังวิเคราะห์ Requirements...',
+            'ux'  => 'กำลังออกแบบ UI Structure...',
+            'dev' => 'กำลังเขียนโค้ด...',
+            'qa'  => 'กำลังตรวจสอบโค้ด...',
+        ];
+
+        $action = $actions[$agentType] ?? 'กำลังทำงาน...';
+
+        return $this->sendToGroup(
+            "{$emoji} <b>{$name} เริ่มทำงาน</b>\n" .
+            "🆔 Task #{$taskId}: {$title}\n" .
+            "⏳ {$action}"
+        );
+    }
+
+    /**
+     * Notify group chat that an agent finished successfully.
+     */
+    public function notifyAgentComplete(int $taskId, string $title, string $agentType, array $summary): bool
+    {
+        $emoji = self::AGENT_EMOJIS[$agentType] ?? '🤖';
+        $name  = self::AGENT_NAMES[$agentType] ?? $agentType;
+        $next  = self::NEXT_AGENT[$agentType] ?? null;
+
+        $summaryLine = match ($agentType) {
+            'pm' => '✅ Features: ' . ($summary['features'] ?? 0)
+                . ' | Requirements: ' . ($summary['requirements'] ?? 0)
+                . ' | Constraints: ' . ($summary['constraints'] ?? 0),
+            'ux' => '✅ Components: ' . ($summary['components'] ?? 0),
+            'dev' => '📄 ไฟล์: ' . ($summary['filenames'] ?? ($summary['files_count'] ?? 0) . ' files'),
+            'qa' => ($summary['passed'] ?? false)
+                ? '✅ ผ่านทุกข้อ! 🎉'
+                : '❌ พบปัญหา ' . ($summary['errors'] ?? 0) . ' ข้อ',
+            default => '✅ Done',
+        };
+
+        $nextLine = $next ? "\n➡️ ส่งต่อให้{$next}" : '';
+
+        return $this->sendToGroup(
+            "{$emoji} <b>{$name} ทำเสร็จแล้ว!</b>\n" .
+            "🆔 Task #{$taskId}: {$title}\n" .
+            "{$summaryLine}{$nextLine}"
+        );
+    }
+
+    /**
+     * Notify group chat about an agent error.
+     */
+    public function notifyAgentError(int $taskId, string $title, string $agentType, string $reason): bool
+    {
+        $emoji = self::AGENT_EMOJIS[$agentType] ?? '🤖';
+        $name  = self::AGENT_NAMES[$agentType] ?? $agentType;
+
+        $shortReason = mb_strlen($reason) > 200 ? mb_substr($reason, 0, 200) . '...' : $reason;
+
+        return $this->sendToGroup(
+            "❌ <b>{$emoji} {$name} พบปัญหา</b>\n" .
+            "🆔 Task #{$taskId}: {$title}\n" .
+            "⚠️ {$shortReason}"
+        );
+    }
+
+    /**
+     * Notify group chat about QA failure with retry info.
+     */
+    public function notifyQaRetry(int $taskId, string $title, int $retryCount): bool
+    {
+        return $this->sendToGroup(
+            "🔄 <b>กุ้ง QA พบปัญหา</b>\n" .
+            "🆔 Task #{$taskId}: {$title}\n" .
+            "🔁 Retry {$retryCount}/3 — ส่งกลับให้กุ้ง Dev แก้ไข"
+        );
+    }
+
+    // ─── Private DM Notifications (existing) ─────────────────────
+
     public function notifyTaskCompleted(int $taskId, string $title, float $costUsd = 0): void
     {
         $cost = $costUsd > 0 ? "\n💰 API Cost: ~\${$costUsd}" : '';

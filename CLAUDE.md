@@ -245,6 +245,10 @@ php artisan test --filter=StateMachineTest
 - [x] Telegram Webhook Controller + `php artisan telegram:set-webhook`
 - [x] Task Continuation (`base_task_id`) — สร้าง Task ต่อยอดจาก Task เดิม, PM/Dev ได้รับ CodeArtifacts เดิมเป็น context
 
+**Phase 7: Agent Group Chat** ✅ COMPLETED
+
+- [x] Agent Group Chat via Telegram — กุ้งทั้ง 4 ตัวโพสต์สถานะลง Group Chat (opt-in)
+
 ---
 
 ## 📞 Escalation Contact
@@ -328,6 +332,36 @@ php artisan telegram:set-webhook https://xxx.ngrok.io
 # 4. Remove webhook when done
 php artisan telegram:set-webhook --remove
 ```
+
+---
+
+## 💬 Agent Group Chat (Telegram)
+
+น้องกุ้งทั้ง 4 ตัวจะโพสต์สถานะลง Telegram Group Chat เมื่อเริ่มและเสร็จงาน:
+
+```
+📋 กุ้ง PM เริ่มทำงาน → 📋 กุ้ง PM ทำเสร็จแล้ว!
+🎨 กุ้ง UX/UI เริ่มทำงาน → 🎨 กุ้ง UX/UI ทำเสร็จแล้ว!
+💻 กุ้ง Dev เริ่มทำงาน → 💻 กุ้ง Dev ทำเสร็จแล้ว!
+🧪 กุ้ง QA เริ่มทำงาน → 🧪 กุ้ง QA ทำเสร็จแล้ว! / ❌ พบปัญหา
+```
+
+### Config (.env)
+```env
+TELEGRAM_GROUP_CHAT_ID=           # Opt-in: ใส่ Group Chat ID ถ้าต้องการ
+```
+
+### Key Methods (`TelegramService`)
+- `sendToGroup()` — ส่งข้อความไปยัง group (silent skip ถ้าไม่ได้ตั้งค่า)
+- `notifyAgentStart()` — แจ้งเมื่อ agent เริ่มทำงาน
+- `notifyAgentComplete()` — แจ้งเมื่อ agent ทำเสร็จพร้อม summary
+- `notifyAgentError()` — แจ้งเมื่อ agent เจอ error
+- `notifyQaRetry()` — แจ้งเมื่อ QA fail และส่งกลับ Dev
+
+### Design
+- **Opt-in** — ถ้า `TELEGRAM_GROUP_CHAT_ID` ว่าง จะข้ามทั้งหมดโดยไม่มี error
+- **Private DM ยังทำงานปกติ** — group chat เป็น channel เพิ่ม ไม่กระทบ DM เดิม
+- **Non-blocking** — ใช้ try/catch + HTTP timeout 5s, ถ้า Telegram ล่ม pipeline ยังเดินต่อ
 
 ---
 

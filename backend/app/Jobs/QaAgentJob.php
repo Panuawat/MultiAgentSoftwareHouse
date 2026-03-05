@@ -43,6 +43,9 @@ class QaAgentJob implements ShouldQueue
             ->values()
             ->toArray();
 
+        // 🔔 Group chat: QA started
+        app(TelegramService::class)->notifyAgentStart($task->id, $task->title, 'qa');
+
         // Notify frontend that QA has started (Ollama can take up to 180s)
         AgentLog::create([
             'task_id'     => $task->id,
@@ -82,6 +85,12 @@ class QaAgentJob implements ShouldQueue
 
         Task::where('id', $this->taskId)->increment('token_used', $tokensUsed);
 
+        // 🔔 Group chat: QA completed
+        app(TelegramService::class)->notifyAgentComplete($task->id, $task->title, 'qa', [
+            'passed' => $response['passed'],
+            'errors' => count($response['errors'] ?? []),
+        ]);
+
         if ($response['passed']) {
             try {
                 $updated = $sm->transition($this->taskId, 'completed');
@@ -111,8 +120,10 @@ class QaAgentJob implements ShouldQueue
             event(new TaskStatusUpdated($result));
 
             if ($result->status === 'dev_coding') {
-                // 🔔 Telegram: QA failed, retrying
-                app(TelegramService::class)->notifyQaFailed($task->id, $task->title, $task->fresh()->retry_count);
+                $retryCount = $task->fresh()->retry_count;
+                // 🔔 Telegram: QA failed, retrying (private DM + group)
+                app(TelegramService::class)->notifyQaFailed($task->id, $task->title, $retryCount);
+                app(TelegramService::class)->notifyQaRetry($task->id, $task->title, $retryCount);
                 DevAgentJob::dispatch($this->taskId);
             }
         } catch (TokenBudgetExceededException $e) {
@@ -154,7 +165,8 @@ class QaAgentJob implements ShouldQueue
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
 
-        // 🔔 Telegram: human review needed
+        // 🔔 Telegram: human review needed (private DM + group)
         app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
+        app(TelegramService::class)->notifyAgentError($task->id, $task->title, 'qa', $reason);
     }
 }

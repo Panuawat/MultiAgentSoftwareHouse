@@ -39,6 +39,9 @@ class DevAgentJob implements ShouldQueue
         $pmOutput    = $agentOutput['pm'] ?? [];
         $uxOutput    = $agentOutput['ux'] ?? [];
 
+        // 🔔 Group chat: Dev started
+        app(TelegramService::class)->notifyAgentStart($task->id, $task->title, 'dev');
+
         try {
             [$response, $tokensUsed] = config('app.agent_mode') === 'mock'
                 ? [$this->getMockResponse('dev'), $this->getMockResponse('dev')['tokens_used']]
@@ -70,6 +73,13 @@ class DevAgentJob implements ShouldQueue
             'output'      => ['files_count' => count($response['files'])],
             'tokens_used' => $tokensUsed,
             'status'      => 'success',
+        ]);
+
+        // 🔔 Group chat: Dev completed
+        $filenames = implode(', ', array_map(fn($f) => $f['filename'], $response['files']));
+        app(TelegramService::class)->notifyAgentComplete($task->id, $task->title, 'dev', [
+            'files_count' => count($response['files']),
+            'filenames'   => $filenames,
         ]);
 
         // Transition first, then fire event with the updated state
@@ -146,7 +156,8 @@ class DevAgentJob implements ShouldQueue
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
 
-        // 🔔 Telegram: human review needed
+        // 🔔 Telegram: human review needed (private DM + group)
         app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
+        app(TelegramService::class)->notifyAgentError($task->id, $task->title, 'dev', $reason);
     }
 }

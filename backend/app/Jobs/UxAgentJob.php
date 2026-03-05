@@ -36,6 +36,9 @@ class UxAgentJob implements ShouldQueue
 
         $pmOutput = $task->agent_output['pm'] ?? $task->agent_output ?? [];
 
+        // 🔔 Group chat: UX started
+        app(TelegramService::class)->notifyAgentStart($task->id, $task->title, 'ux');
+
         try {
             [$response, $tokensUsed] = config('app.agent_mode') === 'mock'
                 ? [$this->getMockResponse('ux'), 100]
@@ -57,6 +60,11 @@ class UxAgentJob implements ShouldQueue
             'output'      => $response,
             'tokens_used' => $tokensUsed,
             'status'      => 'success',
+        ]);
+
+        // 🔔 Group chat: UX completed
+        app(TelegramService::class)->notifyAgentComplete($task->id, $task->title, 'ux', [
+            'components' => count($response['components'] ?? []),
         ]);
 
         // Transition first, then fire event with the updated state
@@ -103,7 +111,8 @@ class UxAgentJob implements ShouldQueue
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
 
-        // 🔔 Telegram: human review needed
+        // 🔔 Telegram: human review needed (private DM + group)
         app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
+        app(TelegramService::class)->notifyAgentError($task->id, $task->title, 'ux', $reason);
     }
 }

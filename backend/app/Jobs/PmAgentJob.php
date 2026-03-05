@@ -36,6 +36,9 @@ class PmAgentJob implements ShouldQueue
             return;
         }
 
+        // 🔔 Group chat: PM started
+        app(TelegramService::class)->notifyAgentStart($task->id, $task->title, 'pm');
+
         try {
             [$response, $tokensUsed] = config('app.agent_mode') === 'mock'
                 ? [$this->getMockResponse('pm'), 50]
@@ -67,6 +70,13 @@ class PmAgentJob implements ShouldQueue
             'output'      => $response,
             'tokens_used' => $tokensUsed,
             'status'      => 'success',
+        ]);
+
+        // 🔔 Group chat: PM completed
+        app(TelegramService::class)->notifyAgentComplete($task->id, $task->title, 'pm', [
+            'features'     => count($response['features'] ?? []),
+            'requirements' => count($response['requirements'] ?? []),
+            'constraints'  => count($response['constraints'] ?? []),
         ]);
 
         event(new TaskStatusUpdated($task->fresh()));
@@ -166,7 +176,8 @@ class PmAgentJob implements ShouldQueue
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
 
-        // 🔔 Telegram: human review needed
+        // 🔔 Telegram: human review needed (private DM + group)
         app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
+        app(TelegramService::class)->notifyAgentError($task->id, $task->title, $agentType, $reason);
     }
 }
