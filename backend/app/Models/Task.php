@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Task extends Model
 {
@@ -47,11 +48,17 @@ class Task extends Model
 
     public function escalate(string $reason): void
     {
-        $this->status = 'human_review_required';
-        $this->agent_output = array_merge($this->agent_output ?? [], [
-            'escalation_reason' => $reason,
-            'escalated_at' => now()->toISOString(),
-        ]);
-        $this->save();
+        DB::transaction(function () use ($reason) {
+            $task = Task::where('id', $this->id)->lockForUpdate()->firstOrFail();
+            $task->status = 'human_review_required';
+            $task->agent_output = array_merge($task->agent_output ?? [], [
+                'escalation_reason' => $reason,
+                'escalated_at' => now()->toISOString(),
+            ]);
+            $task->save();
+        });
+
+        // Refresh the current model instance so callers see the updated state
+        $this->refresh();
     }
 }

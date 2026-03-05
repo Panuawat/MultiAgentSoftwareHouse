@@ -44,9 +44,11 @@ function statusColor(status: string) {
 interface Props {
   tasks: Task[]
   liveTask: Task | null
+  onTaskUpdated?: (task: Task) => void
+  onResumed?: (taskId: number) => void
 }
 
-export default function KanbanBoard({ tasks, liveTask }: Props) {
+export default function KanbanBoard({ tasks, liveTask, onTaskUpdated, onResumed }: Props) {
   const [resumeBudgets, setResumeBudgets] = useState<Record<number, string>>({})
   const [loadingAction, setLoadingAction] = useState<number | null>(null)
 
@@ -55,10 +57,12 @@ export default function KanbanBoard({ tasks, liveTask }: Props) {
       setLoadingAction(task.id)
       const budgetMatch = parseInt(resumeBudgets[task.id] || '0', 10)
       const payload = budgetMatch > task.token_budget ? { token_budget: budgetMatch } : undefined
-      await api.tasks.resume(task.id, payload)
-      window.location.reload()
+      const res = await api.tasks.resume(task.id, payload)
+      onTaskUpdated?.(res.data)
+      onResumed?.(task.id)
     } catch (e) {
       console.error(e)
+    } finally {
       setLoadingAction(null)
     }
   }
@@ -66,10 +70,11 @@ export default function KanbanBoard({ tasks, liveTask }: Props) {
   const handleCancel = async (taskId: number) => {
     try {
       setLoadingAction(taskId)
-      await api.tasks.cancel(taskId)
-      window.location.reload()
+      const res = await api.tasks.cancel(taskId)
+      onTaskUpdated?.(res.data)
     } catch (e) {
       console.error(e)
+    } finally {
       setLoadingAction(null)
     }
   }

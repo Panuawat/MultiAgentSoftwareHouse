@@ -11,6 +11,7 @@ interface Props {
 export default function TaskForm({ projectId, onTaskStarted }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [tokenBudget, setTokenBudget] = useState(10000)
   const [pmReviewEnabled, setPmReviewEnabled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -25,13 +26,14 @@ export default function TaskForm({ projectId, onTaskStarted }: Props) {
         project_id: projectId,
         title: title.trim(),
         description: description.trim(),
-        token_budget: 4000,
+        token_budget: tokenBudget,
         pm_review_enabled: pmReviewEnabled,
       })
       const taskId = createRes.data.id
       await api.tasks.start(taskId)
       setTitle('')
       setDescription('')
+      setTokenBudget(10000)
       setPmReviewEnabled(false)
       onTaskStarted(taskId)
     } catch (err: unknown) {
@@ -66,6 +68,18 @@ export default function TaskForm({ projectId, onTaskStarted }: Props) {
           required
           disabled={submitting}
         />
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-cream-muted whitespace-nowrap">Token Budget</label>
+          <input
+            type="number"
+            min={1}
+            value={tokenBudget}
+            onChange={e => setTokenBudget(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            className="w-32 bg-bark text-cream-DEFAULT border border-clay-dark/40 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-clay-DEFAULT"
+            disabled={submitting}
+          />
+          <span className="text-xs text-cream-muted/50">tokens</span>
+        </div>
         <label className="flex items-center gap-2.5 cursor-pointer group select-none w-fit">
           <div className="relative">
             <input

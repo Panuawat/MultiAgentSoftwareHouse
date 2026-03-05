@@ -10,6 +10,7 @@ use App\Models\Task;
 use App\Services\StateMachineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -92,39 +93,41 @@ class TaskController extends Controller
             'token_budget' => 'nullable|integer|min:1',
         ]);
 
-        if (isset($validated['token_budget']) && $validated['token_budget'] > $task->token_budget) {
-            $task->token_budget = $validated['token_budget'];
+        return DB::transaction(function () use ($task, $validated) {
+            $task = Task::where('id', $task->id)->lockForUpdate()->firstOrFail();
+
+            if (isset($validated['token_budget']) && $validated['token_budget'] > $task->token_budget) {
+                $task->token_budget = $validated['token_budget'];
+            }
+
+            // Determine which job failed by looking at the last agent log
+            $lastLog = $task->agentLogs()->orderBy('id', 'desc')->first();
+            $targetState = 'pm_processing';
+
+            if ($lastLog) {
+                match ($lastLog->agent_type) {
+                    'pm'  => $targetState = 'pm_processing',
+                    'ux'  => $targetState = 'ux_processing',
+                    'dev' => $targetState = ($lastLog->status === 'success') ? 'qa_testing' : 'dev_coding',
+                    'qa'  => $targetState = 'qa_testing',
+                    default => $targetState = 'pm_processing',
+                };
+            }
+
+            // Force transition ignoring normal strict flow since we are resuming
+            $task->status = $targetState;
+            $task->agent_output = collect($task->agent_output ?? [])->except(['escalation_reason', 'escalated_at'])->toArray();
             $task->save();
-        }
 
-        // Determine which job failed by looking at the last agent log
-        $lastLog = $task->agentLogs()->orderBy('id', 'desc')->first();
-        $targetState = 'pm_processing';
-
-        if ($lastLog) {
-            match ($lastLog->agent_type) {
-                'pm'  => $targetState = 'pm_processing',
-                'ux'  => $targetState = 'ux_processing',
-                // If dev succeeded, the pipeline should move to QA — not re-run dev
-                'dev' => $targetState = ($lastLog->status === 'success') ? 'qa_testing' : 'dev_coding',
-                'qa'  => $targetState = 'qa_testing',
-                default => $targetState = 'pm_processing',
+            match ($targetState) {
+                'pm_processing' => PmAgentJob::dispatch($task->id),
+                'ux_processing' => UxAgentJob::dispatch($task->id),
+                'dev_coding'    => DevAgentJob::dispatch($task->id),
+                'qa_testing'    => \App\Jobs\QaAgentJob::dispatch($task->id),
             };
-        }
 
-        // Force transition ignoring normal strict flow since we are resuming
-        $task->status = $targetState;
-        $task->agent_output = collect($task->agent_output ?? [])->except(['escalation_reason', 'escalated_at'])->toArray();
-        $task->save();
-
-        match ($targetState) {
-            'pm_processing' => PmAgentJob::dispatch($task->id),
-            'ux_processing' => UxAgentJob::dispatch($task->id),
-            'dev_coding'    => DevAgentJob::dispatch($task->id),
-            'qa_testing'    => \App\Jobs\QaAgentJob::dispatch($task->id),
-        };
-
-        return response()->json(['task' => $task], 202);
+            return response()->json(['task' => $task], 202);
+        });
     }
 
     public function pmChat(Request $request, Task $task, StateMachineService $sm): JsonResponse

@@ -214,7 +214,12 @@ export default function ProjectPage() {
         {tasks.length > 0 && (
           <div>
             <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Pipeline</h2>
-            <KanbanBoard tasks={tasks} liveTask={liveTask} />
+            <KanbanBoard
+              tasks={tasks}
+              liveTask={liveTask}
+              onTaskUpdated={(updated) => setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))}
+              onResumed={(taskId) => setActiveTaskId(taskId)}
+            />
           </div>
         )}
 
