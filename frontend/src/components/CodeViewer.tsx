@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { FileCode, Download, CheckCircle, XCircle, Eye, Code } from 'lucide-react'
+import { FileCode, Download, CheckCircle, XCircle } from 'lucide-react'
 import { codeToHtml } from 'shiki'
 import { api, type CodeArtifact, type ArtifactVersion } from '@/lib/api'
 
@@ -43,52 +43,6 @@ function HighlightedCode({ code, filename }: { code: string; filename: string })
   )
 }
 
-const PREVIEWABLE_EXTS = new Set(['html', 'htm', 'tsx', 'jsx'])
-
-function isPreviewable(filename: string): boolean {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-  return PREVIEWABLE_EXTS.has(ext)
-}
-
-function buildPreviewHtml(code: string, filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-  let body = code
-
-  if (ext === 'tsx' || ext === 'jsx') {
-    // Strip imports and export lines
-    body = body.replace(/^import\s.+$/gm, '')
-    body = body.replace(/^export\s+(default\s+)?/gm, '')
-    // Try to extract the JSX from the return statement
-    const returnMatch = body.match(/return\s*\(\s*([\s\S]*)\s*\)\s*;?\s*\}?\s*$/)
-    if (returnMatch) {
-      body = returnMatch[1]
-    }
-    // className → class
-    body = body.replace(/\bclassName=/g, 'class=')
-    // Strip JSX comments {/* ... */}
-    body = body.replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-    // Strip event handlers and JS expressions like {handleClick} or {count + 1}
-    // but keep string interpolation like {"text"} or {'text'}
-    body = body.replace(/\{(?!["'`])([^}]*)\}/g, '')
-  }
-
-  // For .html files that already have <html>, return as-is with Tailwind injected
-  if (ext === 'html' || ext === 'htm') {
-    if (body.includes('<html') || body.includes('<!DOCTYPE') || body.includes('<!doctype')) {
-      return body.replace(/<head([^>]*)>/i,
-        `<head$1><script src="https://cdn.tailwindcss.com"><\/script>`)
-    }
-  }
-
-  return `<!DOCTYPE html>
-<html><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://cdn.tailwindcss.com"><\/script>
-<style>body{margin:0;font-family:system-ui,sans-serif}</style>
-</head><body>${body}</body></html>`
-}
-
 interface Props {
   taskId: number
   artifacts: CodeArtifact[]
@@ -100,7 +54,6 @@ export default function CodeViewer({ taskId, artifacts: initialArtifacts }: Prop
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null)
   const [artifacts, setArtifacts] = useState<CodeArtifact[]>(initialArtifacts)
   const [loadingVersion, setLoadingVersion] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     setArtifacts(initialArtifacts)
@@ -187,12 +140,12 @@ export default function CodeViewer({ taskId, artifacts: initialArtifacts }: Prop
       )}
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-3 pt-2 overflow-x-auto border-b border-clay-dark/20 bg-bark/50">
+      <div className="flex gap-1 px-3 pt-2 overflow-x-auto border-b border-clay-dark/20 bg-bark/50">
         {artifacts.map((a, i) => (
           <button
             key={a.id}
-            onClick={() => { setActiveIndex(i); setShowPreview(false) }}
-            className={`px-3 py-1.5 text-xs rounded-t-md whitespace-nowrap transition-colors ${i === activeIndex && !showPreview
+            onClick={() => setActiveIndex(i)}
+            className={`px-3 py-1.5 text-xs rounded-t-md whitespace-nowrap transition-colors ${i === activeIndex
                 ? 'bg-bark-light text-clay-DEFAULT border border-b-bark-light border-clay-dark/30 -mb-px'
                 : 'text-cream-muted hover:text-cream-DEFAULT'
               }`}
@@ -200,42 +153,17 @@ export default function CodeViewer({ taskId, artifacts: initialArtifacts }: Prop
             {a.filename}
           </button>
         ))}
-        {/* Preview toggle */}
-        {active && isPreviewable(active.filename) && (
-          <>
-            <div className="w-px h-4 bg-clay-dark/30 mx-1 flex-shrink-0" />
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-t-md whitespace-nowrap transition-colors ${showPreview
-                  ? 'bg-bark-light text-clay-DEFAULT border border-b-bark-light border-clay-dark/30 -mb-px'
-                  : 'text-cream-muted hover:text-cream-DEFAULT'
-                }`}
-            >
-              {showPreview ? <Code size={12} /> : <Eye size={12} />}
-              {showPreview ? 'Code' : 'Preview'}
-            </button>
-          </>
-        )}
       </div>
 
-      {/* Code display / Preview */}
-      <div className="overflow-auto relative" style={{ maxHeight: showPreview ? 'none' : '24rem' }}>
+      {/* Code display */}
+      <div className="overflow-auto max-h-96 relative">
         {loadingVersion && (
           <div className="absolute inset-0 bg-bark/60 flex items-center justify-center z-10">
             <div className="w-5 h-5 border-2 border-clay-DEFAULT border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-        {active && !showPreview && (
+        {active && (
           <HighlightedCode code={active.content} filename={active.filename} />
-        )}
-        {active && showPreview && (
-          <iframe
-            srcDoc={buildPreviewHtml(active.content, active.filename)}
-            sandbox="allow-scripts"
-            className="w-full border-0 bg-white rounded-b-xl"
-            style={{ height: '28rem' }}
-            title={`Preview: ${active.filename}`}
-          />
         )}
       </div>
     </div>
