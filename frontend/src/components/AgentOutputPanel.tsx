@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, Code2, Paintbrush, CheckSquare } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Code2, Paintbrush, CheckSquare, GitBranch } from 'lucide-react'
 import { api, type AgentLog } from '@/lib/api'
 
 interface Props {
@@ -14,6 +14,7 @@ const AGENT_CONFIG: Record<string, { label: string, icon: any, color: string }> 
     ux: { label: 'UX กุ้ง', icon: Paintbrush, color: 'text-pink-400' },
     dev: { label: 'Dev กุ้ง', icon: Code2, color: 'text-green-400' },
     qa: { label: 'QA กุ้ง', icon: CheckSquare, color: 'text-purple-400' },
+    system: { label: 'System', icon: GitBranch, color: 'text-orange-400' },
 }
 
 export default function AgentOutputPanel({ taskId, updateTrigger = 0 }: Props) {

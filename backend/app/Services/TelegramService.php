@@ -67,4 +67,21 @@ class TelegramService
             "🔁 Retry #{$retryCount} (max 3)"
         );
     }
+
+    public function notifyGithubPush(int $taskId, string $title, bool $success, string $error = ''): void
+    {
+        if ($success) {
+            $this->send(
+                "🐙 <b>Code Pushed to GitHub</b>\n" .
+                "🆔 Task #{$taskId}: {$title}\n" .
+                "✅ Auto-push completed successfully."
+            );
+        } else {
+            $this->send(
+                "🐙 <b>GitHub Push Failed</b>\n" .
+                "🆔 Task #{$taskId}: {$title}\n" .
+                "❌ Error: {$error}"
+            );
+        }
+    }
 }

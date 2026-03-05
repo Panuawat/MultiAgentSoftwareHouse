@@ -20,6 +20,10 @@ return [
     'telegram_bot_token' => env('TELEGRAM_BOT_TOKEN', ''),
     'telegram_chat_id'   => env('TELEGRAM_CHAT_ID', ''),
 
+    'github_push_enabled' => env('GITHUB_PUSH_ENABLED', false),
+    'github_remote_url'   => env('GITHUB_REMOTE_URL', ''),     // e.g. https://github.com/user/repo.git
+    'github_branch'       => env('GITHUB_BRANCH', 'main'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

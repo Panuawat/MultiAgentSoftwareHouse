@@ -86,6 +86,10 @@ class QaAgentJob implements ShouldQueue
             try {
                 $updated = $sm->transition($this->taskId, 'completed');
                 event(new TaskStatusUpdated($updated));
+                // 🐙 Auto-push code to GitHub
+                if (config('app.github_push_enabled')) {
+                    PushToGithubJob::dispatch($this->taskId);
+                }
                 // 🔔 Telegram: Task completed!
                 app(TelegramService::class)->notifyTaskCompleted($task->id, $task->title);
             } catch (TokenBudgetExceededException $e) {
