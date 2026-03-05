@@ -25,8 +25,9 @@
 | Backend & State | Laravel 11 (REST API + MySQL) |
 | Queue | Laravel Queue (Database Driver → Redis ใน Production) |
 | Frontend | Next.js 14 + Tailwind CSS |
-| Realtime | Server-Sent Events (SSE) (With Auto-Reconnect) |
-| Extras | ZIP Export (Code Artifacts) |
+| Realtime | Server-Sent Events (SSE) (Event-Driven + Auto-Reconnect) |
+| Code Highlighting | Shiki (github-dark theme) |
+| Extras | ZIP Export, Live Code Preview (iframe + Tailwind CDN), Auto GitHub Push |
 
 ---
 
@@ -153,10 +154,12 @@ openclaw/
 │   ├── app/
 │   │   ├── Events/            ← สำหรับส่ง Event (SSE) ไปหน้า Dashboard
 │   │   │   └── TaskStatusUpdated.php
+│   │   ├── Listeners/
+│   │   │   └── BroadcastTaskUpdate.php  ← เขียน signal file สำหรับ SSE
 │   │   ├── Services/
 │   │   │   ├── StateMachineService.php
-│   │   │   └── HtmlValidatorService.php  ← ตัวตรวจโครงสร้าง HTML จาก Ollama
-│   │   ├── Jobs/              ← Queue Jobs ของกุ้งแต่ละตัว
+│   │   │   └── TelegramService.php
+│   │   ├── Jobs/              ← Queue Jobs ของกุ้งแต่ละตัว + PushToGithubJob
 │   │   └── Http/Controllers/
 │   └── database/migrations/
 └── frontend/                  ← Next.js 14
@@ -164,9 +167,15 @@ openclaw/
         ├── components/
         │   ├── KanbanBoard.tsx
         │   ├── AgentStatusCard.tsx
-        │   ├── CodeViewer.tsx
-        │   └── AgentOutputPanel.tsx
+        │   ├── CodeViewer.tsx         ← Shiki syntax highlighting + Live Preview (iframe)
+        │   ├── AgentOutputPanel.tsx
+        │   ├── ProjectList.tsx        ← Inline edit/delete projects
+        │   └── PromptEditorModal.tsx
+        ├── hooks/
+        │   └── useTaskStream.ts       ← SSE hook (EventSource)
         └── app/
+            ├── error.tsx              ← Route-level error boundary
+            └── global-error.tsx       ← Layout-level error boundary
 ```
 
 ---
@@ -217,6 +226,16 @@ php artisan test --filter=StateMachineTest
 - [x] Live Cost Tracker (Gemini API cost per task/project)
 - [x] Prompt Editor Modal (edit all 4 agent prompts from UI)
 
+**Phase 5: Feature Upgrades & Polish** ✅ COMPLETED
+
+- [x] Syntax highlighting ใน CodeViewer (Shiki, `github-dark` theme)
+- [x] Task Selector UI (chip bar เปลี่ยน task บน project page)
+- [x] Project Edit/Delete จาก UI (inline edit + delete confirmation)
+- [x] Dashboard Error Boundaries (`error.tsx` + `global-error.tsx`)
+- [x] Event-Driven SSE — แทน polling ด้วย file-based signaling (`BroadcastTaskUpdate` listener → `storage/app/sse/`)
+- [x] Auto GitHub Push (`PushToGithubJob` — commit & push artifacts เมื่อ QA ผ่าน)
+- [x] Live Code Preview (iframe + Tailwind CDN — preview HTML/JSX ใน CodeViewer)
+
 ---
 
 ## 📞 Escalation Contact
@@ -260,3 +279,51 @@ openclaw gateway --port 18789
 - `check-status.ps1 -TaskId 1`
 - `resume-task.ps1 -TaskId 1`
 - `cancel-task.ps1 -TaskId 1`
+
+---
+
+## 📡 SSE Architecture (Event-Driven)
+
+SSE ใช้ file-based signaling แทน DB polling:
+
+```
+Agent Job → event(TaskStatusUpdated)
+         → BroadcastTaskUpdate listener
+         → writes storage/app/sse/task-{id}.json
+
+SseController → checks signal file every 200ms (filemtime)
+             → sends data to client only when file changes
+             → heartbeat every 15s
+             → max 5 min connection
+```
+
+- **Listener:** `app/Listeners/BroadcastTaskUpdate.php`
+- **Registered in:** `AppServiceProvider::boot()`
+- **Signal files:** `storage/app/sse/task-{id}.json`
+- **Zero DB queries** in the SSE loop — `filemtime()` is a single OS syscall
+
+---
+
+## 🐙 Auto GitHub Push
+
+เมื่อ Task ผ่าน QA สำเร็จ → `PushToGithubJob` จะ:
+1. เขียน artifacts ไป `storage/app/projects/project_{id}/`
+2. `git init` + `git add .` + `git commit` + `git push`
+3. Log ผลลัพธ์ไว้ใน `agent_logs` (agent_type: `system`)
+4. ส่ง Telegram notification
+
+### Config (.env)
+```env
+GITHUB_PUSH_ENABLED=false          # เปิด/ปิด auto-push
+GITHUB_REMOTE_URL=                  # e.g. https://github.com/user/repo.git
+GITHUB_BRANCH=main                  # branch ที่จะ push
+```
+
+---
+
+## 🖼️ Live Code Preview
+
+CodeViewer มี **Preview tab** สำหรับไฟล์ `.html`, `.tsx`, `.jsx`:
+- ใช้ `<iframe srcDoc>` + Tailwind CDN (ไม่ต้องติดตั้ง package เพิ่ม)
+- JSX/TSX จะถูก transform เบื้องต้น: strip imports, `className` → `class`, ลบ JS expressions
+- Sandbox mode: `allow-scripts` only (ปลอดภัย)
