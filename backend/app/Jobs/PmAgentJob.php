@@ -14,6 +14,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class PmAgentJob implements ShouldQueue
@@ -74,6 +75,15 @@ class PmAgentJob implements ShouldQueue
                 // Pause here — wait for user to review/approve in the dashboard
                 $updated = $sm->transition($this->taskId, 'pm_review');
                 event(new TaskStatusUpdated($updated));
+
+                // Send Telegram notification with Approve/Revise buttons
+                $telegramResponse = app(TelegramService::class)->notifyPmReview(
+                    $task->id, $task->title, $response
+                );
+                if ($telegramResponse && isset($telegramResponse['result']['message_id'])) {
+                    Cache::put("telegram_pm_review_msg:{$task->id}",
+                        $telegramResponse['result']['message_id'], now()->addDays(1));
+                }
             } else {
                 $updated = $sm->transition($this->taskId, 'ux_processing');
                 event(new TaskStatusUpdated($updated));

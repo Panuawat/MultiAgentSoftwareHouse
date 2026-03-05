@@ -27,7 +27,8 @@
       "Bash(xxd:*)",
       "Bash(npm install:*)",
       "Bash(npx next:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

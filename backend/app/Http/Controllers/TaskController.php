@@ -8,8 +8,10 @@ use App\Jobs\DevAgentJob;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\StateMachineService;
+use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
@@ -142,11 +144,16 @@ class TaskController extends Controller
             'message' => 'required|string|max:2000',
         ]);
 
+        // Cross-channel sync: mark Telegram message as revised via dashboard
+        $this->editTelegramPmReviewMessage($task->id,
+            "✏️ <b>Task #{$task->id} revised via Dashboard</b>\nPM is re-analyzing...");
+
         // Append user message to pm_messages history
         $messages = $task->pm_messages ?? [];
         $messages[] = [
             'role'       => 'user',
             'content'    => $validated['message'],
+            'source'     => 'dashboard',
             'created_at' => now()->toISOString(),
         ];
         $task->pm_messages = $messages;
@@ -167,10 +174,26 @@ class TaskController extends Controller
             ], 422);
         }
 
+        // Cross-channel sync: mark Telegram message as approved via dashboard
+        $this->editTelegramPmReviewMessage($task->id,
+            "✅ <b>Task #{$task->id} Approved via Dashboard</b>\nPipeline continuing to UX design...");
+
         $task = $sm->transition($task->id, 'ux_processing');
         UxAgentJob::dispatch($task->id);
 
         return response()->json(['task' => $task], 202);
+    }
+
+    /**
+     * Edit the Telegram PM review message to prevent stale inline keyboards.
+     */
+    private function editTelegramPmReviewMessage(int $taskId, string $text): void
+    {
+        $messageId = Cache::pull("telegram_pm_review_msg:{$taskId}");
+
+        if ($messageId) {
+            app(TelegramService::class)->editMessageText($messageId, $text);
+        }
     }
 
     private function calculateCost(Task $task): float

@@ -160,7 +160,10 @@ openclaw/
 │   │   │   ├── StateMachineService.php
 │   │   │   └── TelegramService.php
 │   │   ├── Jobs/              ← Queue Jobs ของกุ้งแต่ละตัว + PushToGithubJob
-│   │   └── Http/Controllers/
+│   │   ├── Http/Controllers/
+│   │   │   └── TelegramWebhookController.php  ← Telegram inline button handler
+│   │   └── Console/Commands/
+│   │       └── TelegramSetWebhookCommand.php  ← php artisan telegram:set-webhook
 │   └── database/migrations/
 └── frontend/                  ← Next.js 14
     └── src/
@@ -279,6 +282,46 @@ openclaw gateway --port 18789
 - `check-status.ps1 -TaskId 1`
 - `resume-task.ps1 -TaskId 1`
 - `cancel-task.ps1 -TaskId 1`
+- `pm-approve.ps1 -TaskId 1` — Approve PM review from Telegram/CLI
+- `pm-reply.ps1 -TaskId 1 -Message "..."` — Send revision to PM
+
+---
+
+## 📲 Interactive PM Review via Telegram
+
+เมื่อ `pm_review_enabled=true` → PM Agent เสร็จ → ส่ง Telegram notification พร้อม inline buttons:
+
+```
+PM Agent → pm_review state
+  → Telegram: "📋 PM Analysis for Task #N" + [✅ Approve] [✏️ Revise]
+  → Dashboard: PmChatPanel (ทั้งสอง channel ทำงานพร้อมกัน)
+
+User clicks [✅ Approve] → ux_processing → UxAgentJob
+User clicks [✏️ Revise] → พิมพ์ feedback → pm_processing → PmAgentJob re-runs
+```
+
+### Key Files
+- `TelegramService::notifyPmReview()` — ส่งข้อความพร้อม inline keyboard
+- `TelegramWebhookController` — รับ callback_query + revision text
+- `TelegramSetWebhookCommand` — `php artisan telegram:set-webhook {url}`
+
+### Cross-Channel Sync
+เมื่อ user Approve/Revise จาก Dashboard → edit Telegram message ให้แสดงว่าทำจาก Dashboard แล้ว (ป้องกัน stale buttons)
+
+### Setup
+```bash
+# 1. Set webhook secret (optional, recommended)
+TELEGRAM_WEBHOOK_SECRET=your-secret-here
+
+# 2. Use ngrok for local dev
+ngrok http 8000
+
+# 3. Register webhook
+php artisan telegram:set-webhook https://xxx.ngrok.io
+
+# 4. Remove webhook when done
+php artisan telegram:set-webhook --remove
+```
 
 ---
 

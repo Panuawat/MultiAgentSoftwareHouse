@@ -6,6 +6,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\PromptController;
 use App\Http\Controllers\SseController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TelegramWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::apiResource('projects', ProjectController::class);
@@ -28,3 +29,6 @@ Route::get('prompts', [PromptController::class, 'index']);
 Route::put('prompts/{agent}', [PromptController::class, 'update']);
 
 Route::get('sse/tasks/{task}', [SseController::class, 'stream'])->withoutMiddleware(['api']);
+
+Route::post('telegram/webhook', [TelegramWebhookController::class, 'handle'])
+    ->withoutMiddleware(['throttle:api']);
