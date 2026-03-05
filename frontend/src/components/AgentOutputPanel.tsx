@@ -8,6 +8,7 @@ interface Props {
     updateTrigger?: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AGENT_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
     pm: { label: 'PM กุ้ง', icon: FileText, color: 'text-blue-400' },
     ux: { label: 'UX กุ้ง', icon: Paintbrush, color: 'text-pink-400' },

@@ -13,7 +13,8 @@
     "lucide-react": "^0.576.0",
     "next": "14.2.30",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "shiki": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -70,6 +70,9 @@ export const api = {
     create: (data: { name: string; description?: string }) =>
       axios.post<{ project: Project }>(`${BASE}/api/projects`, data).then(unwrap<Project>('project')),
     get: (id: number) => axios.get<{ project: Project }>(`${BASE}/api/projects/${id}`).then(unwrap<Project>('project')),
+    update: (id: number, data: { name: string; description?: string }) =>
+      axios.put<{ project: Project }>(`${BASE}/api/projects/${id}`, data).then(unwrap<Project>('project')),
+    delete: (id: number) => axios.delete(`${BASE}/api/projects/${id}`),
   },
   tasks: {
     listByProject: (pid: number) => axios.get<{ tasks: Task[] }>(`${BASE}/api/projects/${pid}/tasks`).then(unwrap<Task[]>('tasks')),

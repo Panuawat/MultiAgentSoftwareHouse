@@ -1,7 +1,47 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { FileCode, Download, CheckCircle, XCircle } from 'lucide-react'
+import { codeToHtml } from 'shiki'
 import { api, type CodeArtifact, type ArtifactVersion } from '@/lib/api'
+
+const EXT_LANG_MAP: Record<string, string> = {
+  tsx: 'tsx', ts: 'typescript', jsx: 'jsx', js: 'javascript',
+  py: 'python', php: 'php', css: 'css', html: 'html',
+  json: 'json', md: 'markdown', sql: 'sql', sh: 'bash',
+  yaml: 'yaml', yml: 'yaml', env: 'dotenv',
+}
+
+function getLang(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_LANG_MAP[ext] ?? 'text'
+}
+
+function HighlightedCode({ code, filename }: { code: string; filename: string }) {
+  const [html, setHtml] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    codeToHtml(code, { lang: getLang(filename), theme: 'github-dark' })
+      .then(result => { if (!cancelled) setHtml(result) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [code, filename])
+
+  if (!html) {
+    return (
+      <pre className="p-4 text-xs font-mono text-cream-muted leading-relaxed whitespace-pre-wrap break-all">
+        <code>{code}</code>
+      </pre>
+    )
+  }
+
+  return (
+    <div
+      className="p-4 text-xs leading-relaxed [&_pre]:!bg-transparent [&_code]:!bg-transparent [&_pre]:whitespace-pre-wrap [&_pre]:break-all"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+}
 
 interface Props {
   taskId: number
@@ -123,9 +163,7 @@ export default function CodeViewer({ taskId, artifacts: initialArtifacts }: Prop
           </div>
         )}
         {active && (
-          <pre className="p-4 text-xs font-mono text-cream-muted leading-relaxed whitespace-pre-wrap break-all">
-            <code>{active.content}</code>
-          </pre>
+          <HighlightedCode code={active.content} filename={active.filename} />
         )}
       </div>
     </div>

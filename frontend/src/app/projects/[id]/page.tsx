@@ -189,6 +189,39 @@ export default function ProjectPage() {
         {/* Task Form */}
         <TaskForm projectId={projectId} onTaskStarted={handleTaskStarted} />
 
+        {/* Task Selector */}
+        {tasks.length > 1 && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <span className="text-xs text-cream-muted/60 font-medium flex-shrink-0">Tasks:</span>
+            {tasks.map(t => {
+              const isActive = t.id === activeTaskId
+              const color = t.status === 'completed' ? 'bg-green-800/40 border-green-600/50 text-green-300'
+                : t.status === 'human_review_required' ? 'bg-red-900/40 border-red-700/50 text-red-300'
+                : t.status === 'cancelled' ? 'bg-bark-light border-clay-dark/20 text-cream-muted/50'
+                : 'bg-bark-light border-clay-dark/30 text-cream-muted'
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTaskId(t.id)
+                    setArtifacts([])
+                    if (t.status === 'completed') {
+                      api.tasks.artifacts(t.id).then(aRes => setArtifacts(aRes.data)).catch(() => {})
+                    }
+                  }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all truncate max-w-[200px] ${
+                    isActive
+                      ? 'bg-clay-DEFAULT text-bark border-clay-DEFAULT'
+                      : color + ' hover:border-clay-DEFAULT/60'
+                  }`}
+                >
+                  {t.title}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* PM Chat Panel — shown when task is in pm_review */}
         {currentTask?.status === 'pm_review' && (
           <div>

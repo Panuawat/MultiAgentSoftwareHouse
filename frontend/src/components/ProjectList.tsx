@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PlusCircle, FolderOpen, Loader2 } from 'lucide-react'
+import { PlusCircle, FolderOpen, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { api, type Project } from '@/lib/api'
 
 export default function ProjectList() {
@@ -12,6 +12,11 @@ export default function ProjectList() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
     api.projects.list()
@@ -35,6 +40,38 @@ export default function ProjectList() {
       setError('Failed to create project')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const startEdit = (p: Project) => {
+    setEditingId(p.id)
+    setEditName(p.name)
+    setEditDesc(p.description ?? '')
+    setDeletingId(null)
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId || !editName.trim()) return
+    setEditSaving(true)
+    try {
+      const r = await api.projects.update(editingId, { name: editName.trim(), description: editDesc.trim() || undefined })
+      setProjects(prev => prev.map(p => p.id === editingId ? r.data : p))
+      setEditingId(null)
+    } catch {
+      setError('Failed to update project')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    try {
+      await api.projects.delete(id)
+      setProjects(prev => prev.filter(p => p.id !== id))
+      setDeletingId(null)
+    } catch {
+      setError('Failed to delete project')
     }
   }
 
@@ -112,28 +149,87 @@ export default function ProjectList() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {projects.map(p => (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}`}
-                className="group block bg-bark-light hover:bg-bark-light/80 rounded-xl p-5 border border-clay-dark/20 hover:border-clay-DEFAULT/50 transition-all"
-              >
-                <div className="flex items-start gap-3">
-                  <FolderOpen size={20} className="text-clay-DEFAULT mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h3 className="font-semibold text-cream-DEFAULT group-hover:text-clay-DEFAULT transition-colors">
-                      {p.name}
-                    </h3>
-                    {p.description && (
-                      <p className="text-cream-muted text-sm mt-1 line-clamp-2">{p.description}</p>
-                    )}
-                    <p className="text-xs text-cream-muted/60 mt-2">
-                      {new Date(p.created_at).toLocaleDateString()}
-                    </p>
+            {projects.map(p => {
+              if (editingId === p.id) {
+                return (
+                  <form key={p.id} onSubmit={handleEdit} className="bg-bark-light rounded-xl p-5 border border-clay-DEFAULT/50 space-y-3">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      className="w-full bg-bark text-cream-DEFAULT border border-clay-dark/40 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-clay-DEFAULT"
+                      required
+                    />
+                    <textarea
+                      value={editDesc}
+                      onChange={e => setEditDesc(e.target.value)}
+                      rows={2}
+                      placeholder="Description (optional)"
+                      className="w-full bg-bark text-cream-DEFAULT border border-clay-dark/40 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-clay-DEFAULT resize-none placeholder-cream-muted/50"
+                    />
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={editSaving} className="bg-clay-DEFAULT hover:bg-clay-dark text-bark font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50">
+                        {editSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      <button type="button" onClick={() => setEditingId(null)} className="border border-clay-dark/40 text-cream-muted px-3 py-1.5 rounded-lg text-xs hover:text-cream-DEFAULT transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )
+              }
+
+              return (
+                <div key={p.id} className="group relative">
+                  {deletingId === p.id && (
+                    <div className="absolute inset-0 z-10 bg-bark-light/95 rounded-xl border border-red-700/50 flex flex-col items-center justify-center gap-3 p-4">
+                      <p className="text-red-300 text-sm font-semibold">Delete &quot;{p.name}&quot;?</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleDelete(p.id)} className="bg-red-700 hover:bg-red-600 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors">
+                          Delete
+                        </button>
+                        <button onClick={() => setDeletingId(null)} className="border border-clay-dark/40 text-cream-muted px-3 py-1.5 rounded-lg text-xs hover:text-cream-DEFAULT transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className="block bg-bark-light hover:bg-bark-light/80 rounded-xl p-5 border border-clay-dark/20 hover:border-clay-DEFAULT/50 transition-all"
+                  >
+                    <div className="flex items-start gap-3">
+                      <FolderOpen size={20} className="text-clay-DEFAULT mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-cream-DEFAULT group-hover:text-clay-DEFAULT transition-colors">
+                          {p.name}
+                        </h3>
+                        {p.description && (
+                          <p className="text-cream-muted text-sm mt-1 line-clamp-2">{p.description}</p>
+                        )}
+                        <p className="text-xs text-cream-muted/60 mt-2">
+                          {new Date(p.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(p) }}
+                      className="p-1.5 rounded-md bg-bark/80 hover:bg-bark text-cream-muted hover:text-clay-DEFAULT border border-clay-dark/30 transition-colors"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeletingId(p.id); setEditingId(null) }}
+                      className="p-1.5 rounded-md bg-bark/80 hover:bg-bark text-cream-muted hover:text-red-400 border border-clay-dark/30 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
                 </div>
-              </Link>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
