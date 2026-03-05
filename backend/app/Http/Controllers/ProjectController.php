@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AgentLog;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,19 @@ class ProjectController extends Controller
 
     public function show(Project $project): JsonResponse
     {
-        return response()->json(['project' => $project]);
+        $project->load('tasks.agentLogs');
+
+        $totalCost = $project->tasks->sum(function ($task) {
+            $geminiTokens = $task->agentLogs
+                ->whereIn('agent_type', ['pm', 'dev'])
+                ->sum('tokens_used');
+
+            return $geminiTokens / 1_000_000 * 0.10;
+        });
+
+        return response()->json(['project' => array_merge($project->toArray(), [
+            'total_cost_usd' => round($totalCost, 6),
+        ])]);
     }
 
     public function update(Request $request, Project $project): JsonResponse

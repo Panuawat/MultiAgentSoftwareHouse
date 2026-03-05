@@ -17,13 +17,17 @@ class Task extends Model
         'token_used',
         'retry_count',
         'agent_output',
+        'pm_review_enabled',
+        'pm_messages',
     ];
 
     protected $casts = [
-        'agent_output' => 'array',
-        'token_budget' => 'integer',
-        'token_used' => 'integer',
-        'retry_count' => 'integer',
+        'agent_output'      => 'array',
+        'token_budget'      => 'integer',
+        'token_used'        => 'integer',
+        'retry_count'       => 'integer',
+        'pm_review_enabled' => 'boolean',
+        'pm_messages'       => 'array',
     ];
 
     public function project(): BelongsTo

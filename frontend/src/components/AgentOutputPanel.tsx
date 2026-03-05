@@ -32,8 +32,12 @@ export default function AgentOutputPanel({ taskId, updateTrigger = 0 }: Props) {
         }).finally(() => setLoading(false))
     }, [taskId, updateTrigger])
 
-    if (loading && logs.length === 0) return null
-    if (logs.length === 0) return null
+    if (loading && logs.length === 0) return (
+        <div className="text-sm text-cream-muted/50 italic px-1">Waiting for agent logs...</div>
+    )
+    if (logs.length === 0) return (
+        <div className="text-sm text-cream-muted/50 italic px-1">No logs yet.</div>
+    )
 
     const toggle = (id: number) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
 

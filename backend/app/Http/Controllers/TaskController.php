@@ -32,14 +32,16 @@ class TaskController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'project_id'   => 'required|integer|exists:projects,id',
-            'title'        => 'required|string|max:255',
-            'description'  => 'nullable|string',
-            'token_budget' => 'nullable|integer|min:1',
+            'project_id'        => 'required|integer|exists:projects,id',
+            'title'             => 'required|string|max:255',
+            'description'       => 'nullable|string',
+            'token_budget'      => 'nullable|integer|min:1',
+            'pm_review_enabled' => 'nullable|boolean',
         ]);
 
-        $validated['token_budget'] = $validated['token_budget'] ?? 10000;
-        $validated['status'] = 'pending';
+        $validated['token_budget']      = $validated['token_budget'] ?? 10000;
+        $validated['status']            = 'pending';
+        $validated['pm_review_enabled'] = $validated['pm_review_enabled'] ?? false;
 
         $task = Task::create($validated);
 
@@ -50,7 +52,11 @@ class TaskController extends Controller
     {
         $task->load(['agentLogs', 'codeArtifacts']);
 
-        return response()->json(['task' => $task]);
+        $estimatedCost = $this->calculateCost($task);
+
+        return response()->json(['task' => array_merge($task->toArray(), [
+            'estimated_cost_usd' => $estimatedCost,
+        ])]);
     }
 
     public function start(Task $task, StateMachineService $sm): JsonResponse
@@ -99,7 +105,8 @@ class TaskController extends Controller
             match ($lastLog->agent_type) {
                 'pm'  => $targetState = 'pm_processing',
                 'ux'  => $targetState = 'ux_processing',
-                'dev' => $targetState = 'dev_coding',
+                // If dev succeeded, the pipeline should move to QA — not re-run dev
+                'dev' => $targetState = ($lastLog->status === 'success') ? 'qa_testing' : 'dev_coding',
                 'qa'  => $targetState = 'qa_testing',
                 default => $targetState = 'pm_processing',
             };
@@ -118,5 +125,57 @@ class TaskController extends Controller
         };
 
         return response()->json(['task' => $task], 202);
+    }
+
+    public function pmChat(Request $request, Task $task, StateMachineService $sm): JsonResponse
+    {
+        if ($task->status !== 'pm_review') {
+            return response()->json([
+                'message' => 'PM chat is only available when task is in pm_review state.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'message' => 'required|string|max:2000',
+        ]);
+
+        // Append user message to pm_messages history
+        $messages = $task->pm_messages ?? [];
+        $messages[] = [
+            'role'       => 'user',
+            'content'    => $validated['message'],
+            'created_at' => now()->toISOString(),
+        ];
+        $task->pm_messages = $messages;
+        $task->save();
+
+        // Transition back to pm_processing and re-run PM agent
+        $task = $sm->transition($task->id, 'pm_processing');
+        PmAgentJob::dispatch($task->id);
+
+        return response()->json(['task' => $task->fresh()], 202);
+    }
+
+    public function pmApprove(Task $task, StateMachineService $sm): JsonResponse
+    {
+        if ($task->status !== 'pm_review') {
+            return response()->json([
+                'message' => 'PM approval is only available when task is in pm_review state.',
+            ], 422);
+        }
+
+        $task = $sm->transition($task->id, 'ux_processing');
+        UxAgentJob::dispatch($task->id);
+
+        return response()->json(['task' => $task], 202);
+    }
+
+    private function calculateCost(Task $task): float
+    {
+        $geminiTokens = $task->agentLogs
+            ->whereIn('agent_type', ['pm', 'dev'])
+            ->sum('tokens_used');
+
+        return round($geminiTokens / 1_000_000 * 0.10, 6);
     }
 }

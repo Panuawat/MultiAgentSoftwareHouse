@@ -212,8 +212,10 @@ php artisan test --filter=StateMachineTest
 - [x] เพิ่มปุ่ม Export Code เป็นไฟล์ .zip
 - [x] สร้าง AgentOutputPanel แสดง Log ความคิดของ Agent
 - [x] เพิ่มระบบจัดการ Token Budget และ Resume Task กรณีงบหมด
-- [ ] ฟีเจอร์ย้อนเวลาโค้ด (Code Versioning UI)
-- [ ] เพิ่มช่อง Chat ให้แทรกแซงกุ้ง PM
+- [x] ฟีเจอร์ย้อนเวลาโค้ด (Code Versioning UI)
+- [x] เพิ่มช่อง Chat ให้แทรกแซงกุ้ง PM
+- [x] Live Cost Tracker (Gemini API cost per task/project)
+- [x] Prompt Editor Modal (edit all 4 agent prompts from UI)
 
 ---
 
@@ -221,3 +223,40 @@ php artisan test --filter=StateMachineTest
 
 เมื่อ Task มี Status `human_review_required` ให้แสดง Alert บน Dashboard
 พร้อม Log ย้อนหลังทั้งหมดของ Task นั้นครับ
+
+---
+
+## 📱 Phase 4: Telegram Notifications & OpenClaw Integration
+
+**Phase 4: Telegram + OpenClaw Control** ✅ COMPLETED
+
+- [x] สร้าง `TelegramService.php` — ส่ง Notification เมื่อ Task เสร็จ/ติด/QA Fail
+- [x] เพิ่ม `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` ใน `.env` และ `config/app.php`
+- [x] Wire TelegramService เข้า `QaAgentJob`, `PmAgentJob`, `UxAgentJob`, `DevAgentJob`
+- [x] ติดตั้ง OpenClaw Gateway เชื่อม `@NongCute_bot` กับ Gemini-powered Agent
+- [x] สร้าง PowerShell Skill Scripts สำหรับควบคุม Task จาก Telegram
+
+### Telegram Bot
+- Bot: `@NongCute_bot`
+- Bot Token: `8579700752:AAHT0KDhSQ8LMW66uWiRBNISLl3jOqe2Y3M` (อยู่ใน `.env`)
+- Chat ID: `8768795349` (อยู่ใน `.env`)
+- **TelegramService** → notifications only (completed/failed/human_review)
+- **OpenClaw** → รับคำสั่งจาก Telegram และควบคุมระบบ
+
+### OpenClaw Gateway
+```powershell
+# รัน Gateway (ต้องรันทุกครั้ง — ยังไม่ได้ install as service)
+$env:GOOGLE_API_KEY="AIzaSyCP_T5nuXmSq-psUX_DEk0dHXVPna2LJ64"
+openclaw gateway --port 18789
+```
+- Config: `C:\Users\Advice\.openclaw\openclaw.json`
+- BOOT.md: `C:\Users\Advice\.openclaw\workspace\BOOT.md`
+- Model: `google/gemini-2.5-flash` (API Key แยกจาก Backend)
+
+### OpenClaw Skill Scripts
+อยู่ที่ `C:\Users\Advice\.openclaw\workspace\skills\`:
+- `list-projects.ps1` — GET /api/projects
+- `create-task.ps1 -ProjectId 1 -Title "..." -Description "..." -TokenBudget 15000`
+- `check-status.ps1 -TaskId 1`
+- `resume-task.ps1 -TaskId 1`
+- `cancel-task.ps1 -TaskId 1`

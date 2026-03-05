@@ -13,11 +13,58 @@ Return ONLY valid JSON in the following structure:
     {
       "filename": "relative/path/to/Component.tsx",
       "content": "full file content as string",
-      "artifact_type": "component|page|api|style"
+      "artifact_type": "component|page|api|style|config"
     }
   ],
   "tokens_used": 0
 }
+
+## Required Config Files
+Every output MUST include these files so the project runs without any extra setup:
+
+1. **package.json** (artifact_type: "config")
+```json
+{
+  "name": "openclaw-project",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+  "dependencies": { "next": "14.2.0", "react": "^18", "react-dom": "^18" },
+  "devDependencies": {
+    "typescript": "^5", "@types/node": "^20", "@types/react": "^18", "@types/react-dom": "^18",
+    "tailwindcss": "^3.4.0", "postcss": "^8", "autoprefixer": "^10.0.1"
+  }
+}
+```
+
+2. **tsconfig.json** (artifact_type: "config")
+```json
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"], "allowJs": true, "skipLibCheck": true,
+    "strict": true, "noEmit": true, "esModuleInterop": true, "module": "esnext",
+    "moduleResolution": "bundler", "resolveJsonModule": true, "isolatedModules": true,
+    "jsx": "preserve", "incremental": true, "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+3. **next.config.js** (artifact_type: "config")
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {}
+module.exports = nextConfig
+```
+
+4. **postcss.config.js** (artifact_type: "config")
+```javascript
+module.exports = {
+  plugins: { tailwindcss: {}, autoprefixer: {} }
+}
+```
 
 ## Rules
 - Never exceed your token budget per task
@@ -25,3 +72,4 @@ Return ONLY valid JSON in the following structure:
 - Use Tailwind CSS for all styling (no inline styles)
 - Components must be functional and use React hooks where needed
 - All files must pass TypeScript strict mode
+- Always include all 4 config files listed above in every response

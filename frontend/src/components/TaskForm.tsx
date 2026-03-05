@@ -11,6 +11,7 @@ interface Props {
 export default function TaskForm({ projectId, onTaskStarted }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [pmReviewEnabled, setPmReviewEnabled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,11 +26,13 @@ export default function TaskForm({ projectId, onTaskStarted }: Props) {
         title: title.trim(),
         description: description.trim(),
         token_budget: 4000,
+        pm_review_enabled: pmReviewEnabled,
       })
       const taskId = createRes.data.id
       await api.tasks.start(taskId)
       setTitle('')
       setDescription('')
+      setPmReviewEnabled(false)
       onTaskStarted(taskId)
     } catch (err: unknown) {
       const msg =
@@ -63,6 +66,27 @@ export default function TaskForm({ projectId, onTaskStarted }: Props) {
           required
           disabled={submitting}
         />
+        <label className="flex items-center gap-2.5 cursor-pointer group select-none w-fit">
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={pmReviewEnabled}
+              onChange={e => setPmReviewEnabled(e.target.checked)}
+              disabled={submitting}
+              className="sr-only"
+            />
+            <div className={`w-4 h-4 rounded border transition-colors ${pmReviewEnabled ? 'bg-clay-DEFAULT border-clay-DEFAULT' : 'bg-bark border-clay-dark/50 group-hover:border-clay-DEFAULT/60'}`}>
+              {pmReviewEnabled && (
+                <svg className="w-3 h-3 text-bark mx-auto mt-0.5" fill="none" viewBox="0 0 12 12">
+                  <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+          </div>
+          <span className="text-sm text-cream-muted group-hover:text-cream-DEFAULT transition-colors">
+            👁️ Review PM output before UX starts
+          </span>
+        </label>
         {error && (
           <p className="text-red-400 text-sm">{error}</p>
         )}

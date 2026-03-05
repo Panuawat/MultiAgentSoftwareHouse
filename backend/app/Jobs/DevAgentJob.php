@@ -9,6 +9,7 @@ use App\Models\CodeArtifact;
 use App\Models\Task;
 use App\Services\GeminiService;
 use App\Services\StateMachineService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -43,7 +44,7 @@ class DevAgentJob implements ShouldQueue
                 ? [$this->getMockResponse('dev'), $this->getMockResponse('dev')['tokens_used']]
                 : $this->callGemini($pmOutput, $uxOutput);
         } catch (Throwable $e) {
-            $this->escalate($task, $sm, $pmOutput, $uxOutput, $e->getMessage());
+            $this->escalate($task, $pmOutput, $uxOutput, $e->getMessage());
             return;
         }
 
@@ -71,13 +72,15 @@ class DevAgentJob implements ShouldQueue
             'status'      => 'success',
         ]);
 
-        event(new TaskStatusUpdated($task));
-
+        // Transition first, then fire event with the updated state
         try {
-            $sm->transition($this->taskId, 'qa_testing');
+            $updated = $sm->transition($this->taskId, 'qa_testing');
+            event(new TaskStatusUpdated($updated));
             QaAgentJob::dispatch($this->taskId);
         } catch (TokenBudgetExceededException $e) {
-            $this->escalate($task, $sm, $pmOutput, $uxOutput, "Token budget exceeded ({$e->getMessage()})");
+            $this->escalate($task, $pmOutput, $uxOutput, "Token budget exceeded ({$e->getMessage()})");
+        } catch (Throwable $e) {
+            $this->escalate($task, $pmOutput, $uxOutput, $e->getMessage());
         }
     }
 
@@ -103,7 +106,7 @@ class DevAgentJob implements ShouldQueue
         return json_decode(file_get_contents($path), true);
     }
 
-    private function escalate(Task $task, StateMachineService $sm, array $pm, array $ux, string $reason): void
+    private function escalate(Task $task, array $pm, array $ux, string $reason): void
     {
         AgentLog::create([
             'task_id'     => $task->id,
@@ -116,5 +119,8 @@ class DevAgentJob implements ShouldQueue
 
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
+
+        // 🔔 Telegram: human review needed
+        app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
     }
 }

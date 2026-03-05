@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Loader2, AlertTriangle, CheckCircle, Radio } from 'lucide-react'
+import { ChevronLeft, Loader2, AlertTriangle, CheckCircle, Radio, Settings } from 'lucide-react'
 import { api, type Project, type Task, type CodeArtifact } from '@/lib/api'
 import { useTaskStream } from '@/hooks/useTaskStream'
 import TaskForm from '@/components/TaskForm'
@@ -10,6 +10,8 @@ import KanbanBoard from '@/components/KanbanBoard'
 import AgentStatusCard from '@/components/AgentStatusCard'
 import CodeViewer from '@/components/CodeViewer'
 import AgentOutputPanel from '@/components/AgentOutputPanel'
+import PromptEditorModal from '@/components/PromptEditorModal'
+import PmChatPanel from '@/components/PmChatPanel'
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
@@ -21,17 +23,31 @@ export default function ProjectPage() {
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [loadingProject, setLoadingProject] = useState(true)
   const [updateTrigger, setUpdateTrigger] = useState(0)
+  const [promptModalOpen, setPromptModalOpen] = useState(false)
 
   const { task: liveTask, streaming } = useTaskStream(activeTaskId)
 
-  // Load project and tasks on mount
+  // Load project and tasks on mount — auto-restore the most recently active task
   useEffect(() => {
     Promise.all([
       api.projects.get(projectId),
       api.tasks.listByProject(projectId),
     ]).then(([pRes, tRes]) => {
       setProject(pRes.data)
-      setTasks(tRes.data)
+      const loadedTasks = tRes.data
+      setTasks(loadedTasks)
+
+      if (loadedTasks.length > 0) {
+        const sorted = [...loadedTasks].sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        )
+        const restored = sorted.find(t => t.status !== 'cancelled') ?? sorted[0]
+        setActiveTaskId(restored.id)
+
+        if (restored.status === 'completed') {
+          api.tasks.artifacts(restored.id).then(aRes => setArtifacts(aRes.data)).catch(() => {})
+        }
+      }
     }).finally(() => setLoadingProject(false))
   }, [projectId])
 
@@ -53,13 +69,15 @@ export default function ProjectPage() {
     const TERMINAL = ['completed', 'human_review_required', 'cancelled']
     if (TERMINAL.includes(liveTask.status)) {
       handleTaskComplete(liveTask.id, liveTask.status)
+    } else {
+      // Refresh logs panel on every mid-pipeline SSE event (e.g. QA started)
+      setUpdateTrigger(prev => prev + 1)
     }
   }, [liveTask, handleTaskComplete])
 
   const handleTaskStarted = (taskId: number) => {
     setActiveTaskId(taskId)
     setArtifacts([])
-    // Optimistically add/update task in list
     api.tasks.get(taskId).then(r => {
       setTasks(prev =>
         prev.some(t => t.id === taskId)
@@ -68,6 +86,18 @@ export default function ProjectPage() {
       )
     })
   }
+
+  // Refresh active task data (used by PmChatPanel after actions)
+  const handlePmUpdate = useCallback(() => {
+    if (activeTaskId) {
+      api.tasks.get(activeTaskId).then(r => {
+        setTasks(prev =>
+          prev.map(t => t.id === activeTaskId ? r.data : t)
+        )
+        setUpdateTrigger(prev => prev + 1)
+      })
+    }
+  }, [activeTaskId])
 
   if (loadingProject) {
     return (
@@ -91,6 +121,8 @@ export default function ProjectPage() {
     ? ['completed', 'human_review_required', 'cancelled'].includes(currentTask.status)
     : false
 
+  const totalCost = project.total_cost_usd ?? 0
+
   return (
     <div className="min-h-screen bg-bark text-cream-DEFAULT">
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
@@ -100,14 +132,32 @@ export default function ProjectPage() {
             <ChevronLeft size={16} />
             Projects
           </Link>
-          <h1 className="text-2xl font-bold text-clay-DEFAULT">{project.name}</h1>
-          {project.description && (
-            <p className="text-cream-muted text-sm mt-1">{project.description}</p>
-          )}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl font-bold text-clay-DEFAULT">{project.name}</h1>
+                {totalCost > 0 && (
+                  <span className="text-xs bg-bark-light border border-clay-dark/30 text-clay-DEFAULT/80 px-2.5 py-1 rounded-full font-mono">
+                    💰 Total API Cost: ~${totalCost.toFixed(4)}
+                  </span>
+                )}
+              </div>
+              {project.description && (
+                <p className="text-cream-muted text-sm mt-1">{project.description}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setPromptModalOpen(true)}
+              className="flex-shrink-0 flex items-center gap-2 bg-bark-light hover:bg-bark border border-clay-dark/30 hover:border-clay-DEFAULT/50 text-cream-muted hover:text-cream-DEFAULT px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Settings size={14} />
+              Edit Prompts
+            </button>
+          </div>
         </div>
 
         {/* Live status banner */}
-        {streaming && currentTask && (
+        {streaming && currentTask && currentTask.status !== 'pm_review' && (
           <div className="flex items-center gap-3 bg-clay-dark/30 border border-clay-DEFAULT/40 rounded-xl px-5 py-3">
             <Radio size={16} className="text-clay-DEFAULT animate-pulse" />
             <span className="text-clay-DEFAULT font-semibold text-sm">
@@ -139,6 +189,19 @@ export default function ProjectPage() {
         {/* Task Form */}
         <TaskForm projectId={projectId} onTaskStarted={handleTaskStarted} />
 
+        {/* PM Chat Panel — shown when task is in pm_review */}
+        {currentTask?.status === 'pm_review' && (
+          <div>
+            <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">PM Review</h2>
+            <PmChatPanel
+              taskId={currentTask.id}
+              pmOutput={(currentTask.agent_output as Record<string, unknown>)?.pm}
+              pmMessages={currentTask.pm_messages}
+              onUpdate={handlePmUpdate}
+            />
+          </div>
+        )}
+
         {/* Agent Status Cards */}
         {(currentTask || tasks.length > 0) && (
           <div>
@@ -164,13 +227,16 @@ export default function ProjectPage() {
         )}
 
         {/* Code Viewer */}
-        {artifacts.length > 0 && (
+        {artifacts.length > 0 && currentTask && (
           <div>
             <h2 className="text-sm font-semibold text-cream-muted uppercase tracking-wider mb-3">Generated Code</h2>
-            <CodeViewer artifacts={artifacts} />
+            <CodeViewer taskId={currentTask.id} artifacts={artifacts} />
           </div>
         )}
       </div>
+
+      {/* Prompt Editor Modal */}
+      <PromptEditorModal open={promptModalOpen} onClose={() => setPromptModalOpen(false)} />
     </div>
   )
 }

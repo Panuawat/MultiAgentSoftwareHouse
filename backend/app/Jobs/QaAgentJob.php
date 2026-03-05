@@ -8,6 +8,7 @@ use App\Models\AgentLog;
 use App\Models\Task;
 use App\Services\OllamaService;
 use App\Services\StateMachineService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,7 +20,7 @@ class QaAgentJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 180;
+    public int $timeout = 240; // 60s buffer over Ollama's 180s timeout
 
     public function __construct(public readonly int $taskId)
     {
@@ -42,12 +43,29 @@ class QaAgentJob implements ShouldQueue
             ->values()
             ->toArray();
 
+        // Notify frontend that QA has started (Ollama can take up to 180s)
+        AgentLog::create([
+            'task_id'     => $task->id,
+            'agent_type'  => 'qa',
+            'input'       => ['files_to_review' => count($artifacts)],
+            'output'      => ['status' => 'QA started — reviewing code with Ollama. This may take up to 3 minutes.'],
+            'tokens_used' => 0,
+            'status'      => 'running',
+        ]);
+        event(new TaskStatusUpdated($task));
+
         try {
             [$response, $tokensUsed] = config('app.agent_mode') === 'mock'
                 ? [$this->getMockResponse('qa'), 75]
                 : $this->callOllama($artifacts);
         } catch (Throwable $e) {
-            $this->escalate($task, $sm, $artifacts, $e->getMessage());
+            $this->escalate($task, $artifacts, $e->getMessage());
+            return;
+        }
+
+        // Guard against malformed Ollama response (missing required 'passed' field)
+        if (!array_key_exists('passed', $response)) {
+            $this->escalate($task, $artifacts, "QA response missing 'passed' field. Got: ".json_encode($response));
             return;
         }
 
@@ -62,28 +80,41 @@ class QaAgentJob implements ShouldQueue
             'status'      => $qaStatus,
         ]);
 
+        Task::where('id', $this->taskId)->increment('token_used', $tokensUsed);
+
         if ($response['passed']) {
             try {
-                $sm->transition($this->taskId, 'completed');
-                event(new TaskStatusUpdated($task->fresh()));
+                $updated = $sm->transition($this->taskId, 'completed');
+                event(new TaskStatusUpdated($updated));
+                // 🔔 Telegram: Task completed!
+                app(TelegramService::class)->notifyTaskCompleted($task->id, $task->title);
             } catch (TokenBudgetExceededException $e) {
-                $this->escalate($task, $sm, $artifacts, "Token budget exceeded ({$e->getMessage()})");
+                $this->escalate($task, $artifacts, "Token budget exceeded ({$e->getMessage()})");
+            } catch (Throwable $e) {
+                $this->escalate($task, $artifacts, $e->getMessage());
             }
             return;
         }
 
         // QA failed — attempt retry (StateMachineService auto-escalates at retry_count >= 3)
         try {
+            // Fire event for qa_failed so frontend shows the QA Failed card
             $sm->transition($this->taskId, 'qa_failed');
-            $result = $sm->transition($this->taskId, 'dev_coding');
+            event(new TaskStatusUpdated($task->fresh()));
 
+            // Then immediately move to dev_coding for retry
+            $result = $sm->transition($this->taskId, 'dev_coding');
             event(new TaskStatusUpdated($result));
 
             if ($result->status === 'dev_coding') {
+                // 🔔 Telegram: QA failed, retrying
+                app(TelegramService::class)->notifyQaFailed($task->id, $task->title, $task->fresh()->retry_count);
                 DevAgentJob::dispatch($this->taskId);
             }
         } catch (TokenBudgetExceededException $e) {
-            $this->escalate($task, $sm, $artifacts, "Token budget exceeded ({$e->getMessage()})");
+            $this->escalate($task, $artifacts, "Token budget exceeded ({$e->getMessage()})");
+        } catch (Throwable $e) {
+            $this->escalate($task, $artifacts, $e->getMessage());
         }
     }
 
@@ -105,7 +136,7 @@ class QaAgentJob implements ShouldQueue
         return json_decode(file_get_contents($path), true);
     }
 
-    private function escalate(Task $task, StateMachineService $sm, array $artifacts, string $reason): void
+    private function escalate(Task $task, array $artifacts, string $reason): void
     {
         AgentLog::create([
             'task_id'     => $task->id,
@@ -118,5 +149,8 @@ class QaAgentJob implements ShouldQueue
 
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
+
+        // 🔔 Telegram: human review needed
+        app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
     }
 }

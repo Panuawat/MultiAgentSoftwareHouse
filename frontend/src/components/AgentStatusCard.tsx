@@ -13,7 +13,7 @@ const AGENTS: Agent[] = [
   {
     name: 'กุ้ง PM',
     emoji: '📋',
-    activeStatuses: ['pm_processing'],
+    activeStatuses: ['pm_processing', 'pm_review'],
     doneStatuses: ['ux_processing', 'dev_coding', 'qa_testing', 'qa_failed', 'completed', 'human_review_required', 'cancelled'],
     errorStatuses: [],
   },

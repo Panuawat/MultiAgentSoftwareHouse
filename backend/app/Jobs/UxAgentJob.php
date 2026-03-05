@@ -8,6 +8,7 @@ use App\Models\AgentLog;
 use App\Models\Task;
 use App\Services\OllamaService;
 use App\Services\StateMachineService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,7 +20,7 @@ class UxAgentJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 180;
+    public int $timeout = 240; // 60s buffer over Ollama's 180s timeout
 
     public function __construct(public readonly int $taskId)
     {
@@ -40,7 +41,7 @@ class UxAgentJob implements ShouldQueue
                 ? [$this->getMockResponse('ux'), 100]
                 : $this->callOllama($pmOutput);
         } catch (Throwable $e) {
-            $this->escalate($task, $sm, $pmOutput, $e->getMessage());
+            $this->escalate($task, $pmOutput, $e->getMessage());
             return;
         }
 
@@ -58,13 +59,15 @@ class UxAgentJob implements ShouldQueue
             'status'      => 'success',
         ]);
 
-        event(new TaskStatusUpdated($task));
-
+        // Transition first, then fire event with the updated state
         try {
-            $sm->transition($this->taskId, 'dev_coding');
+            $updated = $sm->transition($this->taskId, 'dev_coding');
+            event(new TaskStatusUpdated($updated));
             DevAgentJob::dispatch($this->taskId);
         } catch (TokenBudgetExceededException $e) {
-            $this->escalate($task, $sm, $pmOutput, "Token budget exceeded ({$e->getMessage()})");
+            $this->escalate($task, $pmOutput, "Token budget exceeded ({$e->getMessage()})");
+        } catch (Throwable $e) {
+            $this->escalate($task, $pmOutput, $e->getMessage());
         }
     }
 
@@ -86,7 +89,7 @@ class UxAgentJob implements ShouldQueue
         return json_decode(file_get_contents($path), true);
     }
 
-    private function escalate(Task $task, StateMachineService $sm, array $input, string $reason): void
+    private function escalate(Task $task, array $input, string $reason): void
     {
         AgentLog::create([
             'task_id'     => $task->id,
@@ -99,5 +102,8 @@ class UxAgentJob implements ShouldQueue
 
         $task->escalate('AGENT_ERROR: '.$reason);
         event(new TaskStatusUpdated($task->fresh()));
+
+        // 🔔 Telegram: human review needed
+        app(TelegramService::class)->notifyHumanReviewRequired($task->id, $task->title, $reason);
     }
 }

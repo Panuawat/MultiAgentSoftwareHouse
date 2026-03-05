@@ -11,7 +11,8 @@ class StateMachineService
 {
     private const TRANSITIONS = [
         'pending'               => ['pm_processing', 'cancelled'],
-        'pm_processing'         => ['ux_processing', 'human_review_required', 'cancelled'],
+        'pm_processing'         => ['pm_review', 'ux_processing', 'human_review_required', 'cancelled'],
+        'pm_review'             => ['pm_processing', 'ux_processing', 'human_review_required', 'cancelled'],
         'ux_processing'         => ['dev_coding', 'human_review_required', 'cancelled'],
         'dev_coding'            => ['qa_testing', 'human_review_required', 'cancelled'],
         'qa_testing'            => ['completed', 'qa_failed', 'human_review_required', 'cancelled'],

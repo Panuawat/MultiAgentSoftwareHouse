@@ -11,7 +11,7 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { label: 'Pending', emoji: '⏳', statuses: ['pending'] },
-  { label: 'กุ้ง PM', emoji: '📋', statuses: ['pm_processing'] },
+  { label: 'กุ้ง PM', emoji: '📋', statuses: ['pm_processing', 'pm_review'] },
   { label: 'กุ้ง UX → Dev', emoji: '🎨', statuses: ['ux_processing', 'dev_coding'] },
   { label: 'กุ้ง QA', emoji: '🔍', statuses: ['qa_testing', 'qa_failed'] },
   { label: 'Done', emoji: '✅', statuses: ['completed', 'human_review_required', 'cancelled'] },
@@ -20,6 +20,7 @@ const COLUMNS: Column[] = [
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending',
   pm_processing: 'PM Processing',
+  pm_review: 'PM Review',
   ux_processing: 'UX Designing',
   dev_coding: 'Dev Coding',
   qa_testing: 'QA Testing',
@@ -35,6 +36,7 @@ function statusColor(status: string) {
     case 'human_review_required': return 'bg-red-900/40 text-red-300 border-red-700/50'
     case 'cancelled': return 'bg-gray-700/40 text-gray-400 border-gray-600/50'
     case 'qa_failed': return 'bg-amber/20 text-amber border-amber/40'
+    case 'pm_review': return 'bg-clay-dark/30 text-clay-DEFAULT border-clay-DEFAULT/50'
     default: return 'bg-clay-dark/20 text-clay-DEFAULT border-clay-dark/40'
   }
 }
@@ -54,7 +56,6 @@ export default function KanbanBoard({ tasks, liveTask }: Props) {
       const budgetMatch = parseInt(resumeBudgets[task.id] || '0', 10)
       const payload = budgetMatch > task.token_budget ? { token_budget: budgetMatch } : undefined
       await api.tasks.resume(task.id, payload)
-      // For immediate feedback
       window.location.reload()
     } catch (e) {
       console.error(e)
@@ -122,6 +123,13 @@ export default function KanbanBoard({ tasks, liveTask }: Props) {
                       </div>
                     )}
 
+                    {task.status === 'pm_review' && (
+                      <div className="flex items-center gap-1 mb-2 text-clay-DEFAULT font-semibold">
+                        <span className="text-[10px]">👁️</span>
+                        Awaiting PM Review
+                      </div>
+                    )}
+
                     <p className="font-medium text-sm truncate mb-1">{task.title}</p>
                     <p className="opacity-70 mb-2">{STATUS_LABEL[task.status] ?? task.status}</p>
 
@@ -138,6 +146,14 @@ export default function KanbanBoard({ tasks, liveTask }: Props) {
                             style={{ width: `${Math.min(100, (task.token_used / task.token_budget) * 100)}%` }}
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Cost badge — show only for completed tasks with non-zero cost */}
+                    {task.status === 'completed' && task.estimated_cost_usd !== undefined && task.estimated_cost_usd > 0 && (
+                      <div className="mt-2 text-[10px] text-green-300/70 flex items-center gap-1">
+                        <span>💰</span>
+                        <span>~${task.estimated_cost_usd.toFixed(4)}</span>
                       </div>
                     )}
 
