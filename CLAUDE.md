@@ -126,7 +126,7 @@ APP_AGENT_MODE=mock php artisan serve
 
 **ตารางหลัก:**
 - `projects` — โปรเจกต์หลัก
-- `tasks` — งานย่อย (มี `token_budget`, `token_used`, `retry_count`)
+- `tasks` — งานย่อย (มี `token_budget`, `token_used`, `retry_count`, `base_task_id`)
 - `agent_logs` — ประวัติการทำงานของกุ้งแต่ละตัว
 - `code_artifacts` — โค้ดที่กุ้ง Dev เขียน (Versioning)
 
@@ -238,6 +238,12 @@ php artisan test --filter=StateMachineTest
 - [x] Event-Driven SSE — แทน polling ด้วย file-based signaling (`BroadcastTaskUpdate` listener → `storage/app/sse/`)
 - [x] Auto GitHub Push (`PushToGithubJob` — commit & push artifacts เมื่อ QA ผ่าน)
 - [x] Live Code Preview (iframe + Tailwind CDN — preview HTML/JSX ใน CodeViewer)
+
+**Phase 6: Advanced Features** ✅ COMPLETED
+
+- [x] Interactive PM Review via Telegram (inline keyboard Approve/Revise + cross-channel sync)
+- [x] Telegram Webhook Controller + `php artisan telegram:set-webhook`
+- [x] Task Continuation (`base_task_id`) — สร้าง Task ต่อยอดจาก Task เดิม, PM/Dev ได้รับ CodeArtifacts เดิมเป็น context
 
 ---
 
@@ -370,3 +376,23 @@ CodeViewer มี **Preview tab** สำหรับไฟล์ `.html`, `.tsx`
 - ใช้ `<iframe srcDoc>` + Tailwind CDN (ไม่ต้องติดตั้ง package เพิ่ม)
 - JSX/TSX จะถูก transform เบื้องต้น: strip imports, `className` → `class`, ลบ JS expressions
 - Sandbox mode: `allow-scripts` only (ปลอดภัย)
+
+---
+
+## 🔗 Task Continuation (base_task_id)
+
+สร้าง Task ใหม่ที่ต่อยอดจาก Task เดิม แทนที่จะเริ่มจากศูนย์ทุกครั้ง:
+
+```bash
+# API
+POST /api/tasks { "project_id": 1, "title": "Add dark mode", "base_task_id": 5 }
+
+# OpenClaw Skill
+create-task.ps1 -ProjectId 1 -Title "Add dark mode" -BaseTaskId 5
+```
+
+### How It Works
+- `tasks.base_task_id` — nullable FK ชี้ไปยัง Task ต้นทาง
+- **PM Agent**: ดึง CodeArtifacts (latest version) จาก base task → append เข้า prompt เป็น "existing codebase" → วางแผนแก้ไข
+- **Dev Agent**: ได้รับ CodeArtifacts เดียวกัน → output เป็นไฟล์เต็ม (modified) ไม่ใช่ diff
+- UX/QA ทำงานปกติ ไม่ได้รับ base task context
