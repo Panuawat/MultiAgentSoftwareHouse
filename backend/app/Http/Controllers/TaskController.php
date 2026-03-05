@@ -40,6 +40,7 @@ class TaskController extends Controller
             'description'       => 'nullable|string',
             'token_budget'      => 'nullable|integer|min:1',
             'pm_review_enabled' => 'nullable|boolean',
+            'base_task_id'      => 'nullable|integer|exists:tasks,id',
         ]);
 
         $validated['token_budget']      = $validated['token_budget'] ?? 10000;

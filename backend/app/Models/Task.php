@@ -11,6 +11,7 @@ class Task extends Model
 {
     protected $fillable = [
         'project_id',
+        'base_task_id',
         'title',
         'description',
         'status',
@@ -34,6 +35,11 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function baseTask(): BelongsTo
+    {
+        return $this->belongsTo(Task::class, 'base_task_id');
     }
 
     public function agentLogs(): HasMany

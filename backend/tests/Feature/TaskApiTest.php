@@ -130,6 +130,42 @@ class TaskApiTest extends TestCase
             ->assertJsonCount(1, 'logs');
     }
 
+    public function test_can_create_task_with_base_task_id(): void
+    {
+        $baseTask = Task::create([
+            'project_id' => $this->project->id,
+            'title'      => 'Base task',
+            'status'     => 'completed',
+        ]);
+
+        $response = $this->postJson('/api/tasks', [
+            'project_id'   => $this->project->id,
+            'title'        => 'Continuation task',
+            'description'  => 'Modify the landing page',
+            'base_task_id' => $baseTask->id,
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('task.base_task_id', $baseTask->id);
+
+        $this->assertDatabaseHas('tasks', [
+            'title'        => 'Continuation task',
+            'base_task_id' => $baseTask->id,
+        ]);
+    }
+
+    public function test_create_task_with_invalid_base_task_id_fails(): void
+    {
+        $response = $this->postJson('/api/tasks', [
+            'project_id'   => $this->project->id,
+            'title'        => 'Bad continuation',
+            'base_task_id' => 99999,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('base_task_id');
+    }
+
     public function test_can_list_task_artifacts(): void
     {
         $task = Task::create([

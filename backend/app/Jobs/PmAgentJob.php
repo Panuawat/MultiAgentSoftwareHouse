@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Events\TaskStatusUpdated;
 use App\Exceptions\TokenBudgetExceededException;
 use App\Models\AgentLog;
+use App\Models\CodeArtifact;
 use App\Models\Task;
 use App\Services\GeminiService;
 use App\Services\StateMachineService;
@@ -102,6 +103,11 @@ class PmAgentJob implements ShouldQueue
         $systemPrompt = file_get_contents(base_path('../orchestrator/prompts/pm_system.txt'));
         $userMessage  = 'User requirement: '.$task->description;
 
+        // If this task continues from a previous task, provide existing code context
+        if ($task->base_task_id) {
+            $userMessage .= $this->buildBaseTaskContext($task->base_task_id);
+        }
+
         // If there are prior chat messages, append revision context
         $pmMessages = $task->pm_messages ?? [];
         $userRevisions = array_filter($pmMessages, fn($m) => $m['role'] === 'user');
@@ -113,6 +119,30 @@ class PmAgentJob implements ShouldQueue
         $result = app(GeminiService::class)->generate($systemPrompt, $userMessage);
 
         return [$result['content'], $result['tokens_used']];
+    }
+
+    private function buildBaseTaskContext(int $baseTaskId): string
+    {
+        $artifacts = CodeArtifact::where('task_id', $baseTaskId)
+            ->orderByDesc('version')
+            ->get()
+            ->unique('filename');
+
+        if ($artifacts->isEmpty()) {
+            return '';
+        }
+
+        $context = "\n\n--- EXISTING CODEBASE (from Task #{$baseTaskId}) ---\n";
+        $context .= "This task modifies an existing codebase. Here is the current code:\n\n";
+
+        foreach ($artifacts as $artifact) {
+            $context .= "[File: {$artifact->filename}]\n";
+            $context .= "<code>\n{$artifact->content}\n</code>\n\n";
+        }
+
+        $context .= "Please write a plan to modify this code to fulfill the new requirements.\n";
+
+        return $context;
     }
 
     private function getMockResponse(string $agent): array

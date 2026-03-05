@@ -42,7 +42,7 @@ class DevAgentJob implements ShouldQueue
         try {
             [$response, $tokensUsed] = config('app.agent_mode') === 'mock'
                 ? [$this->getMockResponse('dev'), $this->getMockResponse('dev')['tokens_used']]
-                : $this->callGemini($pmOutput, $uxOutput);
+                : $this->callGemini($pmOutput, $uxOutput, $task->base_task_id);
         } catch (Throwable $e) {
             $this->escalate($task, $pmOutput, $uxOutput, $e->getMessage());
             return;
@@ -85,11 +85,15 @@ class DevAgentJob implements ShouldQueue
     }
 
     /** @return array{0: array, 1: int} */
-    private function callGemini(array $pmOutput, array $uxOutput): array
+    private function callGemini(array $pmOutput, array $uxOutput, ?int $baseTaskId = null): array
     {
         $systemPrompt = file_get_contents(base_path('../orchestrator/prompts/dev_system.txt'));
         $userMessage  = "Requirements:\n".json_encode($pmOutput, JSON_PRETTY_PRINT)
             ."\n\nUI Structure:\n".json_encode($uxOutput, JSON_PRETTY_PRINT);
+
+        if ($baseTaskId) {
+            $userMessage .= $this->buildBaseTaskContext($baseTaskId);
+        }
 
         $result = app(GeminiService::class)->generate($systemPrompt, $userMessage);
 
@@ -97,6 +101,28 @@ class DevAgentJob implements ShouldQueue
         $result['content']['tokens_used'] = $result['tokens_used'];
 
         return [$result['content'], $result['tokens_used']];
+    }
+
+    private function buildBaseTaskContext(int $baseTaskId): string
+    {
+        $artifacts = CodeArtifact::where('task_id', $baseTaskId)
+            ->orderByDesc('version')
+            ->get()
+            ->unique('filename');
+
+        if ($artifacts->isEmpty()) {
+            return '';
+        }
+
+        $context = "\n\n--- EXISTING CODEBASE (from Task #{$baseTaskId}) ---\n";
+        $context .= "This task modifies an existing codebase. You must output the fully modified files (complete content, not diffs).\n\n";
+
+        foreach ($artifacts as $artifact) {
+            $context .= "[File: {$artifact->filename}]\n";
+            $context .= "<code>\n{$artifact->content}\n</code>\n\n";
+        }
+
+        return $context;
     }
 
     private function getMockResponse(string $agent): array
