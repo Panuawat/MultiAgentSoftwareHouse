@@ -4,7 +4,17 @@
 
 $BACKEND_DIR = "$PSScriptRoot\backend"
 $FRONTEND_DIR = "$PSScriptRoot\frontend"
-$GOOGLE_API_KEY = "AIzaSyCP_T5nuXmSq-psUX_DEk0dHXVPna2LJ64"
+# Load API key from .env file or environment variable
+$envFile = "$PSScriptRoot\backend\.env"
+if (Test-Path $envFile) {
+    $match = Select-String -Path $envFile -Pattern '^GOOGLE_API_KEY=(.+)$'
+    if ($match) { $GOOGLE_API_KEY = $match.Matches[0].Groups[1].Value }
+}
+if (-not $GOOGLE_API_KEY) { $GOOGLE_API_KEY = $env:GOOGLE_API_KEY }
+if (-not $GOOGLE_API_KEY) {
+    Write-Host "⚠ GOOGLE_API_KEY not found in .env or environment!" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "`n🦞 Starting OpenClaw Software House...`n" -ForegroundColor Cyan
 

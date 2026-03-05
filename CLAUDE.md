@@ -238,15 +238,15 @@ php artisan test --filter=StateMachineTest
 
 ### Telegram Bot
 - Bot: `@NongCute_bot`
-- Bot Token: `8579700752:AAHT0KDhSQ8LMW66uWiRBNISLl3jOqe2Y3M` (อยู่ใน `.env`)
-- Chat ID: `8768795349` (อยู่ใน `.env`)
+- Bot Token: อยู่ใน `.env` → `TELEGRAM_BOT_TOKEN`
+- Chat ID: อยู่ใน `.env` → `TELEGRAM_CHAT_ID`
 - **TelegramService** → notifications only (completed/failed/human_review)
 - **OpenClaw** → รับคำสั่งจาก Telegram และควบคุมระบบ
 
 ### OpenClaw Gateway
 ```powershell
 # รัน Gateway (ต้องรันทุกครั้ง — ยังไม่ได้ install as service)
-$env:GOOGLE_API_KEY="AIzaSyCP_T5nuXmSq-psUX_DEk0dHXVPna2LJ64"
+# ตั้ง GOOGLE_API_KEY ใน .env หรือ environment variable ก่อนรัน
 openclaw gateway --port 18789
 ```
 - Config: `C:\Users\Advice\.openclaw\openclaw.json`
